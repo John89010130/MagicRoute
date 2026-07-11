@@ -1,4 +1,3 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_KEY = 'minha-chave-secreta-123';
 
 interface RequestOptions {
@@ -10,7 +9,8 @@ interface RequestOptions {
 async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', params, body } = options;
 
-  let url = `${API_BASE_URL}${endpoint}`;
+  const baseUrl = localStorage.getItem('CUSTOM_API_URL')?.trim() || import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  let url = `${baseUrl}${endpoint}`;
 
   if (params) {
     const searchParams = new URLSearchParams();

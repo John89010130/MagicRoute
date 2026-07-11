@@ -2,7 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buscarEmpresaPorCNPJ, loginUsuario } from '../services/api';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Settings } from 'lucide-react';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,6 +16,20 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [empresaInfo, setEmpresaInfo] = useState<any>(null);
+
+  const [showApiConfig, setShowApiConfig] = useState(false);
+  const [customApiUrl, setCustomApiUrl] = useState(localStorage.getItem('CUSTOM_API_URL') || '');
+
+  const handleSaveApiUrl = () => {
+    if (customApiUrl.trim()) {
+      localStorage.setItem('CUSTOM_API_URL', customApiUrl.trim());
+      alert('URL da API salva com sucesso: ' + customApiUrl.trim());
+    } else {
+      localStorage.removeItem('CUSTOM_API_URL');
+      alert('URL customizada removida. Usando API padrão.');
+    }
+    setShowApiConfig(false);
+  };
 
   // Formatar CNPJ
   const formatCNPJ = (value: string) => {
@@ -155,7 +169,77 @@ export default function Login() {
         display: 'flex',
         flexDirection: 'column',
         padding: '40px 28px',
+        position: 'relative',
       }}>
+        {/* Botão de engrenagem para configurar API */}
+        <button
+          type="button"
+          onClick={() => setShowApiConfig(!showApiConfig)}
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            background: 'none',
+            border: 'none',
+            color: '#adb5bd',
+            cursor: 'pointer',
+            padding: '4px',
+            transition: 'color 0.2s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#8c2cf5')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#adb5bd')}
+          title="Configurar URL da API"
+        >
+          <Settings size={20} />
+        </button>
+
+        {showApiConfig && (
+          <div style={{
+            background: '#f8f9fa',
+            padding: '16px',
+            borderRadius: '16px',
+            border: '1.5px solid #ced4da',
+            marginBottom: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}>
+            <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#495057' }}>URL da API Customizada (Localtunnel/Ngrok):</label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={customApiUrl}
+                onChange={(e) => setCustomApiUrl(e.target.value)}
+                placeholder="https://..."
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1.5px solid #ced4da',
+                  fontSize: '0.85rem',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleSaveApiUrl}
+                style={{
+                  background: '#8c2cf5',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 14px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Salvar
+              </button>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.7rem', color: '#868e96' }}>Deixe vazio para usar o padrão (.env ou local).</p>
+          </div>
+        )}
         {/* Logo MagicRoute (Roxo com linha, igual à Imagem 1) */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
           <div style={{ position: 'relative', width: '120px', height: '120px' }}>
