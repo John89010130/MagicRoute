@@ -72,8 +72,8 @@ export default function Login() {
             return;
           }
         }
-      } catch {
-        // Ignora erros
+      } catch (err: any) {
+        setError(`Erro ao buscar CNPJ: ${err?.message || err || 'Erro desconhecido'}. URL: ${localStorage.getItem('CUSTOM_API_URL') || import.meta.env.VITE_API_URL || 'Padrão'}`);
       }
     }
   };
@@ -400,6 +400,9 @@ export default function Login() {
               borderRadius: '8px',
               border: '1px solid #f5c6cb',
               margin: '4px 0 0 0',
+              wordBreak: 'break-all',
+              userSelect: 'text',
+              WebkitUserSelect: 'text',
             }}>
               {error}
             </p>
