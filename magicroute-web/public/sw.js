@@ -53,6 +53,23 @@ self.addEventListener('fetch', (event) => {
     return; // Deixa ir direto para a rede sem cache
   }
 
+  // Estratégia Network-First para index.html e a raiz '/' para garantir atualizações instantâneas
+  if (reqUrl.pathname.endsWith('/') || reqUrl.pathname.endsWith('index.html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse.clone()));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
   // Estratégia Stale-While-Revalidate para o restante (CSS, JS, Imagens, HTML do app)
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {

@@ -543,7 +543,7 @@ export default function Entregas() {
     }
 
     if (wazeUrl) {
-      window.open(wazeUrl, '_blank');
+      window.location.href = wazeUrl;
     }
 
     // 2. Disparar início do rastreamento GPS
