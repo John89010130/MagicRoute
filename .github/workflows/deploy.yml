@@ -31,6 +31,9 @@ jobs:
         run: |
           cd magicroute-web
           npm run build
+        env:
+          VITE_API_URL: https://magicroute-api-john.loca.lt
+          VITE_GOOGLE_MAPS_API_KEY: AIzaSyAmta1q0E63ZqjWC-T-OwydVBIzhFFvnSY
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
