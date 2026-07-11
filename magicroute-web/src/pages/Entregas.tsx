@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs } from '../services/api';
+import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS } from '../services/api';
 import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History } from 'lucide-react';
 
 export default function Entregas() {
@@ -49,6 +49,8 @@ export default function Entregas() {
   const [activeTab, setActiveTab] = useState<'entregas' | 'logs'>('entregas');
   const [loteLogs, setLoteLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [gpsTrace, setGpsTrace] = useState<any>(null);
+  const [loadingGpsTrace, setLoadingGpsTrace] = useState(false);
 
   const fetchLoteLogs = async () => {
     if (!user || !idLote) return;
@@ -60,6 +62,87 @@ export default function Entregas() {
       console.error('Erro ao buscar logs do lote:', err);
     } finally {
       setLoadingLogs(false);
+    }
+  };
+
+  const reverseGeocode = async (lat: number, lng: number, streetOnly = false): Promise<string> => {
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    if (!apiKey) return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    try {
+      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`);
+      const data = await res.json();
+      if (data.status === 'OK' && data.results.length > 0) {
+        const result = data.results[0];
+        const routeComponent = result.address_components.find((c: any) => c.types.includes('route'));
+        const streetNumberComponent = result.address_components.find((c: any) => c.types.includes('street_number'));
+        
+        if (routeComponent) {
+          if (streetOnly) return routeComponent.long_name;
+          const num = streetNumberComponent ? `, ${streetNumberComponent.long_name}` : '';
+          return `${routeComponent.long_name}${num}`;
+        }
+        return result.formatted_address.split(',')[0];
+      }
+    } catch (e) {
+      console.error('Erro no reverseGeocode:', e);
+    }
+    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  };
+
+  const fetchAndProcessGpsTrace = async (pedido: string) => {
+    if (!idLote) return;
+    setLoadingGpsTrace(true);
+    setGpsTrace(null);
+    try {
+      const allPoints = await buscarPontosGPS(idLote);
+      const deliveryPoints = (allPoints || []).filter((p: any) => p.NumeroPedido === pedido);
+      
+      if (deliveryPoints.length === 0) {
+        setGpsTrace(null);
+        return;
+      }
+
+      // 1. Ponto Inicial (Partida)
+      const firstPt = deliveryPoints[0];
+      const startAddress = await reverseGeocode(firstPt.Latitude, firstPt.Longitude);
+      const startTime = new Date(firstPt.DataRegistro).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      // 2. Ponto Final (Chegada)
+      const lastPt = deliveryPoints[deliveryPoints.length - 1];
+      const endAddress = await reverseGeocode(lastPt.Latitude, lastPt.Longitude);
+      const endTime = new Date(lastPt.DataRegistro).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      // 3. Pontos intermediários
+      const intermediateStreets: string[] = [];
+      const sampledPoints: any[] = [];
+      
+      // Amostragem para evitar estouro da cota de requisições do Google
+      const step = Math.max(1, Math.floor(deliveryPoints.length / 8));
+      for (let i = 1; i < deliveryPoints.length - 1; i += step) {
+        sampledPoints.push(deliveryPoints[i]);
+      }
+
+      for (const pt of sampledPoints) {
+        const street = await reverseGeocode(pt.Latitude, pt.Longitude, true);
+        if (
+          street && 
+          !intermediateStreets.includes(street) && 
+          street !== startAddress.split(',')[0] && 
+          street !== endAddress.split(',')[0]
+        ) {
+          intermediateStreets.push(street);
+        }
+      }
+
+      setGpsTrace({
+        start: { address: startAddress, time: startTime },
+        end: { address: endAddress, time: endTime },
+        streets: intermediateStreets
+      });
+    } catch (err) {
+      console.error('Erro ao processar histórico de trajeto:', err);
+    } finally {
+      setLoadingGpsTrace(false);
     }
   };
 
@@ -135,6 +218,10 @@ export default function Entregas() {
     setFormHoraInicio2(ent.HoraRecebimentoInicio2 || ent.HORARECEBIMENTOINICIO2 || '');
     setFormHoraFim2(ent.HoraRecebimentoFim2 || ent.HORARECEBIMENTOFIM2 || '');
     setFormDataEntrega(ent.DataEntrega || ent.DATAENTREGA || '');
+    const pedido = ent.NumeroPedido || ent.NUMEROPEDIDO || '';
+    if (pedido) {
+      fetchAndProcessGpsTrace(pedido);
+    }
     setShowEditModal(true);
   };
 
@@ -910,6 +997,44 @@ export default function Entregas() {
               style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #ced4da', outline: 'none', background: '#ffffff', fontSize: '0.85rem', resize: 'vertical', fontFamily: 'sans-serif' }}
             />
           </div>
+
+          {!isNew && (
+            <div style={{ background: '#f3f0ff', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px', boxSizing: 'border-box', border: '1.5px solid #dcd3ff' }}>
+              <h4 style={{ margin: 0, fontSize: '0.8rem', color: '#8c2cf5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Trajeto Realizado pelo Motorista (GPS)</h4>
+              
+              {loadingGpsTrace ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#6c757d' }}>
+                  <div className="spinner" style={{ width: '16px', height: '16px', border: '2px solid #eaeaea', borderTopColor: '#8c2cf5' }} />
+                  <span>Carregando histórico de ruas...</span>
+                </div>
+              ) : gpsTrace ? (
+                <div style={{ fontSize: '0.85rem', color: '#495057', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                    <span style={{ color: '#2a9d8f', fontWeight: 'bold' }}>Iniciou às {gpsTrace.start.time}:</span>
+                    <span style={{ fontWeight: 600 }}>{gpsTrace.start.address}</span>
+                  </div>
+                  
+                  {gpsTrace.streets.length > 0 && (
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                      <span style={{ color: '#8c2cf5', fontWeight: 'bold' }}>Percurso:</span>
+                      <span style={{ color: '#495057', fontWeight: 500, background: '#ffffff', padding: '4px 8px', borderRadius: '8px', border: '1px solid #eaeaea' }}>
+                        {gpsTrace.streets.join(' ➔ ')}
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                    <span style={{ color: '#e63946', fontWeight: 'bold' }}>Finalizou às {gpsTrace.end.time}:</span>
+                    <span style={{ fontWeight: 600 }}>{gpsTrace.end.address}</span>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#868e96', fontStyle: 'italic' }}>
+                  Nenhum trajeto de GPS capturado para esta entrega.
+                </p>
+              )}
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1.5px solid #f1f3f5', paddingTop: '16px', boxSizing: 'border-box' }}>
             <button 
