@@ -28,12 +28,14 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
 
   const headers: HeadersInit = {
     'x-api-key': API_KEY,
+    'ngrok-skip-browser-warning': 'true',
   };
 
   const fetchOptions: RequestInit = {
     method,
     headers,
     cache: 'no-store', // Prevent aggressive browser caching of GET requests
+    credentials: 'include', // Enviar cookies (como o do ngrok) nas requisições CORS
   };
 
   if (body) {
