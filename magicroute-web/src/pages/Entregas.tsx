@@ -529,24 +529,8 @@ export default function Entregas() {
 
   const handleIniciarEntrega = async (entrega: any) => {
     if (!user) return;
-    const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
-    
-    // Disparar início do rastreamento GPS
-    window.dispatchEvent(new CustomEvent('iniciar-gps', {
-      detail: {
-        idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
-        idLote: String(idLote),
-        numeroPedido: String(entrega.NumeroPedido)
-      }
-    }));
 
-    try {
-      await gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave);
-      await fetchEntregas();
-    } catch (err) {
-      console.error('Erro ao iniciar entrega:', err);
-    }
-
+    // 1. Resolver URL e abrir Waze IMEDIATAMENTE (dentro do clique síncrono do usuário)
     const lat = entrega.LatitudeEntrega || entrega.LATITUDE;
     const lng = entrega.LongitudeEntrega || entrega.LONGITUDE;
     const endereco = entrega.EnderecoEntrega || entrega.ENDERECO || '';
@@ -560,6 +544,24 @@ export default function Entregas() {
 
     if (wazeUrl) {
       window.open(wazeUrl, '_blank');
+    }
+
+    // 2. Disparar início do rastreamento GPS
+    window.dispatchEvent(new CustomEvent('iniciar-gps', {
+      detail: {
+        idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
+        idLote: String(idLote),
+        numeroPedido: String(entrega.NumeroPedido)
+      }
+    }));
+
+    // 3. Registrar o evento no banco (assíncrono)
+    const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
+    try {
+      await gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave);
+      await fetchEntregas();
+    } catch (err) {
+      console.error('Erro ao iniciar entrega:', err);
     }
   };
 
