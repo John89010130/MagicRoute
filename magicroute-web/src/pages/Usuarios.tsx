@@ -401,7 +401,7 @@ export default function Usuarios() {
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', border: '1px solid #e9ecef', boxShadow: '0 4px 12px rgba(54, 162, 235, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#36a2eb' }}>
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', border: '1px solid #e9ecef', boxShadow: '0 4px 12px rgba(54, 162, 235, 0.08)' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(54, 162, 235, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#36a2eb' }}>
             <Truck size={22} />
           </div>
