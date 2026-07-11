@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { buscarEntregasPorLote } from '../services/api';
+import { buscarEntregasPorLote, buscarPontosGPS } from '../services/api';
 import { Map as MapIcon, Loader2, List, ExternalLink, ArrowLeft } from 'lucide-react';
-import { GoogleMap, useJsApiLoader, DirectionsRenderer, MarkerF, InfoWindowF } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, DirectionsRenderer, MarkerF, InfoWindowF, PolylineF } from '@react-google-maps/api';
 
 const libraries: ("places" | "geometry" | "drawing" | "visualization")[] = ['places'];
 
@@ -21,6 +21,8 @@ export default function Mapa() {
   const [loading, setLoading] = useState(true);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
+  const [gpsPoints, setGpsPoints] = useState<any[]>([]);
+  const [showRealPath, setShowRealPath] = useState(true);
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
@@ -28,7 +30,7 @@ export default function Mapa() {
   });
 
   useEffect(() => {
-    const fetchEntregas = async () => {
+    const fetchEntregasAndGPS = async () => {
       if (!user || !idLote) {
         setLoading(false);
         return;
@@ -37,13 +39,17 @@ export default function Mapa() {
         const isAdm = user.tipoPessoaAtivo === 'Administrador';
         const result = await buscarEntregasPorLote(user.idEmpresa, isAdm ? '' : user.codigo, idLote);
         setEntregas(result || []);
+        
+        // Buscar histórico de GPS do motorista para o lote
+        const points = await buscarPontosGPS(idLote);
+        setGpsPoints(points || []);
       } catch (err) {
-        console.error('Erro ao buscar entregas:', err);
+        console.error('Erro ao buscar entregas/GPS:', err);
       } finally {
         setLoading(false);
       }
     };
-    fetchEntregas();
+    fetchEntregasAndGPS();
   }, [idLote, user]);
 
   useEffect(() => {
@@ -150,6 +156,20 @@ export default function Mapa() {
       const waypoints = points.slice(1, -1).map(p => encodeURIComponent(p)).join('|');
       return `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}${waypoints ? `&waypoints=${waypoints}` : ''}`;
     }
+  };
+
+  const getGpsPathsByDelivery = () => {
+    const paths: Record<string, { lat: number; lng: number }[]> = {};
+    gpsPoints.forEach(pt => {
+      const ped = pt.NumeroPedido || 'Desconhecido';
+      const lat = Number(pt.Latitude);
+      const lng = Number(pt.Longitude);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        if (!paths[ped]) paths[ped] = [];
+        paths[ped].push({ lat, lng });
+      }
+    });
+    return paths;
   };
 
   const renderGoogleMap = (height: string) => {
@@ -265,6 +285,28 @@ export default function Mapa() {
               </MarkerF>
             );
           })}
+
+          {/* Renderizar trajeto do GPS real realizado pelo motorista */}
+          {showRealPath && Object.entries(getGpsPathsByDelivery()).map(([pedido, path], idx) => {
+            const colors = ['#00e676', '#ff9100', '#2979ff', '#ff1744', '#d500f9', '#00e5ff'];
+            const color = colors[idx % colors.length];
+            return (
+              <PolylineF
+                key={pedido}
+                path={path}
+                options={{
+                  strokeColor: color,
+                  strokeOpacity: 0.95,
+                  strokeWeight: 5,
+                  icons: window.google ? [{
+                    icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW },
+                    offset: '100%',
+                    repeat: '100px'
+                  }] : undefined
+                }}
+              />
+            );
+          })}
         </GoogleMap>
       </div>
     );
@@ -287,7 +329,7 @@ export default function Mapa() {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
         <div style={{
           background: '#8c2cf5',
-          padding: '24px 16px',
+          padding: '20px 16px',
           color: '#ffffff',
           display: 'flex',
           alignItems: 'center',
@@ -295,34 +337,34 @@ export default function Mapa() {
           boxShadow: '0 4px 10px rgba(140, 44, 245, 0.15)',
           borderBottomLeftRadius: '24px',
           borderBottomRightRadius: '24px',
+          zIndex: 10
         }}>
           <button onClick={() => navigate(`/entregas?idLote=${idLote}`)} style={{ background: 'rgba(255, 255, 255, 0.2)', border: 'none', borderRadius: '12px', padding: '10px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ArrowLeft size={20} />
           </button>
           <div style={{ textAlign: 'center' }}>
-            <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, letterSpacing: '0.5px' }}>Rota e Mapa</h1>
-            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', opacity: 0.9 }}>Lote #{idLote}</p>
+            <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, letterSpacing: '0.5px' }}>Trajeto Realizado</h1>
+            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', opacity: 0.9 }}>Lote #{idLote}</p>
           </div>
-          <div style={{ width: '40px' }} />
+          <button 
+            onClick={() => setShowRealPath(!showRealPath)}
+            style={{ 
+              background: showRealPath ? '#2a9d8f' : 'rgba(255, 255, 255, 0.2)', 
+              border: 'none', 
+              borderRadius: '12px', 
+              padding: '8px 12px', 
+              color: '#fff', 
+              fontSize: '0.75rem', 
+              fontWeight: 700, 
+              cursor: 'pointer' 
+            }}
+          >
+            {showRealPath ? 'Ver GPS' : 'Original'}
+          </button>
         </div>
         
-        <div style={{ padding: '24px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ width: '100%', height: '400px', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '4px solid white', position: 'relative' }}>
-            <iframe 
-              src={googleMapsEmbedUrl()}
-              width="100%" 
-              height="100%" 
-              style={{ border: 0 }} 
-              allowFullScreen 
-              loading="lazy" 
-              referrerPolicy="no-referrer-when-downgrade"
-            />
-            <div style={{ position: 'absolute', bottom: '16px', right: '16px' }}>
-              <button onClick={() => window.open(googleMapsEmbedUrl().replace('/embed/v1/directions', '/dir'), '_blank')} style={{ background: '#1e293b', border: 'none', borderRadius: '14px', padding: '12px 20px', color: '#fff', fontWeight: 700, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
-                <ExternalLink size={16} /> Abrir no App Google Maps
-              </button>
-            </div>
-          </div>
+        <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
+          {renderGoogleMap('100%')}
         </div>
       </div>
     );
@@ -346,6 +388,26 @@ export default function Mapa() {
         <div style={{ display: 'flex', gap: '12px' }}>
           <button onClick={() => navigate(`/entregas?idLote=${idLote}`)} style={{ background: '#f3f0ff', border: 'none', color: '#8c2cf5', padding: '10px 20px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }}>
             <List size={16} /> Ver Lista de Entregas
+          </button>
+          <button 
+            onClick={() => setShowRealPath(!showRealPath)}
+            style={{ 
+              background: showRealPath ? '#e6fcf5' : '#f1f3f5', 
+              border: '1.5px solid',
+              borderColor: showRealPath ? '#099268' : '#ced4da',
+              color: showRealPath ? '#099268' : '#495057', 
+              padding: '10px 20px', 
+              borderRadius: '10px', 
+              fontSize: '0.85rem', 
+              fontWeight: 700, 
+              cursor: 'pointer', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              transition: 'all 0.2s' 
+            }}
+          >
+            <MapIcon size={16} /> {showRealPath ? 'Ocultar Trajeto Real (GPS)' : 'Exibir Trajeto Real (GPS)'}
           </button>
         </div>
       </div>

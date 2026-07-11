@@ -318,3 +318,28 @@ export async function marcarLogsLidos(idEmpresa: number, idLote?: number, ids?: 
     }
   });
 }
+
+export async function gravarPontoGPS(
+  idEmpresa: string,
+  idLote: string,
+  numeroPedido: string,
+  latitude: number,
+  longitude: number,
+  accuracy?: number
+) {
+  return apiRequest('/api/gps/gps-point', {
+    method: 'POST',
+    body: {
+      IDEmpresa: idEmpresa,
+      IDLote: idLote,
+      NumeroPedido: numeroPedido,
+      Latitude: latitude,
+      Longitude: longitude,
+      Accuracy: accuracy
+    }
+  });
+}
+
+export async function buscarPontosGPS(idLote: string) {
+  return apiRequest(`/api/gps/gps-points/${idLote}`);
+}

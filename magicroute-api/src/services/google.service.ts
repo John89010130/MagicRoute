@@ -12,7 +12,7 @@ export async function getDirectionsETA(origin: {lat: number, lng: number}, desti
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originStr}&destination=${destStr}${waypointsStr ? `&waypoints=${waypointsStr}` : ''}&key=${apiKey}`;
 
     const res = await fetch(url);
-    const data = await res.json();
+    const data = await res.json() as any;
 
     if (data.status !== 'OK') {
       console.error('Google Directions API Error:', data.status, data.error_message);

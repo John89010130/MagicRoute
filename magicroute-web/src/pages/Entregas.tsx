@@ -443,6 +443,16 @@ export default function Entregas() {
   const handleIniciarEntrega = async (entrega: any) => {
     if (!user) return;
     const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
+    
+    // Disparar início do rastreamento GPS
+    window.dispatchEvent(new CustomEvent('iniciar-gps', {
+      detail: {
+        idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
+        idLote: String(idLote),
+        numeroPedido: String(entrega.NumeroPedido)
+      }
+    }));
+
     try {
       await gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave);
       await fetchEntregas();
@@ -469,6 +479,10 @@ export default function Entregas() {
   const handleFinalizarEntrega = async (entrega: any) => {
     if (!user) return;
     const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
+    
+    // Disparar parada do rastreamento GPS
+    window.dispatchEvent(new CustomEvent('parar-gps'));
+
     try {
       await gravarEvento(user.codigo, user.codigo, 'FimEntrega', chave);
       await fetchEntregas();
@@ -480,6 +494,10 @@ export default function Entregas() {
   const handleReabrirEntrega = async (entrega: any) => {
     if (!user) return;
     const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
+    
+    // Limpar qualquer rastreamento ativo
+    window.dispatchEvent(new CustomEvent('parar-gps'));
+
     try {
       await gravarEvento(user.codigo, user.codigo, 'LimpaInicioFinalEntrega', chave);
       await fetchEntregas();

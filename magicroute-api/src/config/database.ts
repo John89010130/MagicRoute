@@ -32,7 +32,7 @@ export async function getPool(): Promise<sql.ConnectionPool> {
 export async function executeQuery<T = any>(query: string): Promise<T[]> {
   const db = await getPool();
   const request = db.request();
-  request.timeout = 300000; // 5 minutos para otimizações pesadas
+  (request as any).timeout = 300000; // 5 minutos para otimizações pesadas
   const result = await request.query(query);
   return result.recordset as T[];
 }

@@ -8,6 +8,7 @@ import entregasRoutes from './routes/entregas.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import configuracoesRoutes from './routes/configuracoes.routes';
 import logsRoutes, { registrarLogInterno } from './routes/logs.routes';
+import gpsRoutes from './routes/gps.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -44,6 +45,7 @@ app.use('/api/entregas', entregasRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/configuracoes', configuracoesRoutes);
 app.use('/api/logs', logsRoutes);
+app.use('/api/gps', gpsRoutes);
 
 // ==========================================
 // Manter compatibilidade com endpoints antigos

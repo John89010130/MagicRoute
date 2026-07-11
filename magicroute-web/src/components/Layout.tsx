@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { buscarLogs, marcarLogsLidos } from '../services/api';
+import { useGpsTracker } from '../hooks/useGpsTracker';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  useGpsTracker();
   const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
