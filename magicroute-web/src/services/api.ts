@@ -12,19 +12,22 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
   const baseUrl = localStorage.getItem('CUSTOM_API_URL')?.trim() || import.meta.env.VITE_API_URL || 'http://localhost:3001';
   let url = `${baseUrl}${endpoint}`;
 
-  if (params) {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') {
-        searchParams.append(key, String(value));
-      }
-    });
-    url += `?${searchParams.toString()}`;
-  }
+  // Injetar o skip do ngrok como parâmetro de query string (evita OPTIONS preflight CORS blocks)
+  const queryParams = {
+    ...params,
+    'ngrok-skip-browser-warning': 'true'
+  };
+
+  const searchParams = new URLSearchParams();
+  Object.entries(queryParams).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') {
+      searchParams.append(key, String(value));
+    }
+  });
+  url += `?${searchParams.toString()}`;
 
   const headers: HeadersInit = {
     'x-api-key': API_KEY,
-    'ngrok-skip-browser-warning': 'true',
   };
 
   const fetchOptions: RequestInit = {
