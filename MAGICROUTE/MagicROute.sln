@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33829.357
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MAGICROUTE", "APISQL_SERVER\MAGICROUTE.csproj", "{C8B0D5E9-55D3-4457-80CA-0EAB2FA10BC3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C8B0D5E9-55D3-4457-80CA-0EAB2FA10BC3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8B0D5E9-55D3-4457-80CA-0EAB2FA10BC3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8B0D5E9-55D3-4457-80CA-0EAB2FA10BC3}.Release|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8B0D5E9-55D3-4457-80CA-0EAB2FA10BC3}.Release|Any CPU.Build.0 = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7BD54455-9CA7-4CCC-A7B5-8641DAFC5003}
+	EndGlobalSection
+EndGlobal

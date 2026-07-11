@@ -1,0 +1,181 @@
+﻿/* ================================================
+   SWAGGER UI - Tema Claro Moderno (TID Software)
+   Fundo branco | Cor principal: #9035e4
+   Estilo: Tecnológico + Minimalista + Flat
+================================================ */
+
+body, .swagger-ui {
+    background: #ffffff !important;
+    color: #222 !important;
+    font-family: "Inter", "Segoe UI", "Roboto", sans-serif !important;
+    letter-spacing: 0.2px;
+}
+
+    /* ===== Topbar ===== */
+    .swagger-ui .topbar {
+        background: linear-gradient(90deg, #9035e4, #a04cf0);
+        border: none;
+        box-shadow: 0 2px 4px rgba(144, 53, 228, 0.25);
+    }
+
+        .swagger-ui .topbar a {
+            color: #fff !important;
+            font-size: 1.6em;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+    /* ===== Botões ===== */
+    .swagger-ui .btn {
+        background: #9035e4 !important;
+        border: none !important;
+        border-radius: 6px !important;
+        color: #fff !important;
+        font-weight: 600 !important;
+        text-transform: none !important;
+        box-shadow: none !important;
+        transition: all 0.25s ease-in-out;
+    }
+
+        .swagger-ui .btn:hover {
+            background: #7a25d1 !important;
+            transform: translateY(-1px);
+        }
+
+    .swagger-ui .authorize {
+        border: 1px solid #9035e4 !important;
+        color: #9035e4 !important;
+        background: transparent !important;
+        transition: all 0.25s ease-in-out;
+    }
+
+        .swagger-ui .authorize:hover {
+            background: #9035e4 !important;
+            color: #fff !important;
+        }
+
+    /* ===== Inputs e Selects ===== */
+    .swagger-ui input, .swagger-ui select, .swagger-ui textarea {
+        background: #fafafa !important;
+        border: 1px solid #ddd !important;
+        border-radius: 6px !important;
+        color: #222 !important;
+        transition: all 0.2s ease-in-out;
+    }
+
+        .swagger-ui input:focus, .swagger-ui select:focus, .swagger-ui textarea:focus {
+            border-color: #9035e4 !important;
+            box-shadow: 0 0 0 3px rgba(144, 53, 228, 0.1);
+        }
+
+    /* ===== Cards (endpoints) ===== */
+    .swagger-ui .opblock {
+        border-radius: 8px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin: 10px 0;
+        transition: all 0.25s ease-in-out;
+    }
+
+        .swagger-ui .opblock:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.12);
+        }
+
+/* ===== Cores por Método ===== */
+.opblock-get {
+    border-color: #00a3ff !important;
+    background: rgba(0,163,255,0.05) !important;
+}
+
+.opblock-post {
+    border-color: #00c853 !important;
+    background: rgba(0,200,83,0.05) !important;
+}
+
+.opblock-put {
+    border-color: #f9a825 !important;
+    background: rgba(249,168,37,0.05) !important;
+}
+
+.opblock-delete {
+    border-color: #e53935 !important;
+    background: rgba(229,57,53,0.05) !important;
+}
+
+/* ===== Método (caixa colorida à esquerda) ===== */
+.opblock-summary-method {
+    border-radius: 4px;
+    font-weight: 700;
+    padding: 6px 12px;
+    color: #fff !important;
+    text-transform: uppercase;
+}
+
+.opblock-get .opblock-summary-method {
+    background: #00a3ff !important;
+}
+
+.opblock-post .opblock-summary-method {
+    background: #00c853 !important;
+}
+
+.opblock-put .opblock-summary-method {
+    background: #f9a825 !important;
+}
+
+.opblock-delete .opblock-summary-method {
+    background: #e53935 !important;
+}
+
+/* ===== Links, Headers e Detalhes ===== */
+.swagger-ui .info a,
+.swagger-ui .model-title,
+.swagger-ui .parameter__name {
+    color: #9035e4 !important;
+}
+
+.swagger-ui .info .title {
+    color: #222 !important;
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.swagger-ui .response-col_description__inner pre,
+.swagger-ui .curl-command,
+.swagger-ui code {
+    background: #f5f5f7 !important;
+    border-radius: 6px !important;
+    color: #222 !important;
+    padding: 10px !important;
+    font-family: "JetBrains Mono", monospace;
+}
+
+/* ===== Animações suaves ===== */
+.swagger-ui .opblock-summary {
+    transition: background 0.2s ease-in-out;
+}
+
+    .swagger-ui .opblock-summary:hover {
+        background: rgba(144,53,228,0.05);
+    }
+
+.swagger-ui .response,
+.swagger-ui .execute-wrapper,
+.swagger-ui .opblock-body {
+    transition: all 0.3s ease-in-out;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #9035e4;
+    }
