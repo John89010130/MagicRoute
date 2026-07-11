@@ -9,7 +9,7 @@ interface RequestOptions {
 async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', params, body } = options;
 
-  const baseUrl = localStorage.getItem('CUSTOM_API_URL')?.trim() || import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const baseUrl = (localStorage.getItem('CUSTOM_API_URL')?.trim() || import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
   let url = `${baseUrl}${endpoint}`;
 
   // Injetar o skip do ngrok como parâmetro de query string (evita OPTIONS preflight CORS blocks)
