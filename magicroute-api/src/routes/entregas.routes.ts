@@ -30,6 +30,7 @@ router.get('/por-data', async (req: Request, res: Response) => {
 
   const query = `SELECT
     ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.UrlVeiculo, ent.PlacaEntrega,
+    ent.HoraSaidaPrevista, ent.HoraRetornoPrevista,
     SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END) AS Pendente,
     SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END) AS Entregue,
     SUM(CASE WHEN ent.StatusEntrega = 'Em Transporte' THEN 1 ELSE 0 END) AS EmTransporte,
@@ -39,7 +40,7 @@ router.get('/por-data', async (req: Request, res: Response) => {
     LEFT JOIN startapp_magicroute..Lotes lot ON lot.IDEmpresa = ent.IDEmpresa AND lot.IDLote = ent.IDLote
     WHERE ent.IDEmpresa = ${idEmpresa} AND ent.CodigoMotorista = ${codigoMotorista}
       AND CAST(ent.DataEntrega AS DATE) BETWEEN '${dataInicial}' AND '${dataFinal}'
-    GROUP BY ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo, lot.Situacao`;
+    GROUP BY ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo, ent.HoraSaidaPrevista, ent.HoraRetornoPrevista, lot.Situacao`;
 
   await execAndRespond(query, res);
 });

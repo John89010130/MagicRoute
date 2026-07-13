@@ -203,6 +203,15 @@ export default function Inicio() {
                     <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>
                       Lote {lote.IDLote}
                     </h3>
+                    <p style={{ fontSize: '0.8rem', color: '#8c2cf5', fontWeight: 700, margin: 0 }}>
+                      <strong>Data Prevista:</strong> {lote.DataEntrega || 'N/A'}
+                    </p>
+                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
+                      <strong>Início Previsto:</strong> {lote.HoraSaidaPrevista || 'N/A'}
+                    </p>
+                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
+                      <strong>Fim Previsto:</strong> {lote.HoraRetornoPrevista || 'N/A'}
+                    </p>
                     <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                       <strong>Saída:</strong> {lote.LocalSaida || 'Base Central'}
                     </p>

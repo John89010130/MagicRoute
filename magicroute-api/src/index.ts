@@ -128,6 +128,7 @@ app.get('/BuscaEntregasData', async (req, res) => {
 
   const query = `SELECT
     ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.UrlVeiculo, ent.PlacaEntrega, ent.CodigoMotorista,
+    ent.HoraSaidaPrevista, ent.HoraRetornoPrevista,
     usr.Nome AS NomeMotorista,
     SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END) AS Pendente,
     SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END) AS Entregue,
@@ -138,7 +139,7 @@ app.get('/BuscaEntregasData', async (req, res) => {
     LEFT JOIN startapp_magicroute..Lotes lot ON lot.IDEmpresa = ent.IDEmpresa AND lot.IDLote = ent.IDLote
     LEFT JOIN startapp_magicroute..Usuarios usr ON usr.IDEmpresa = ent.IDEmpresa AND usr.Codigo = ent.CodigoMotorista AND usr.TipoPessoa IN ('M', 'A/M')
     ${filterQuery}
-    GROUP BY ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo, ent.CodigoMotorista, usr.Nome, lot.Situacao`;
+    GROUP BY ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo, ent.CodigoMotorista, ent.HoraSaidaPrevista, ent.HoraRetornoPrevista, usr.Nome, lot.Situacao`;
   await execAndRespond(query, res);
 });
 
