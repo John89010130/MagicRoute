@@ -2068,7 +2068,7 @@ export default function Entregas() {
         borderBottomRightRadius: '24px',
       }}>
         <button 
-          onClick={() => navigate('/inicio')}
+          onClick={() => { window.location.href = '/inicio'; }}
           style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
         >
           <ArrowLeft size={24} />
@@ -2416,7 +2416,7 @@ export default function Entregas() {
             <button
               onClick={() => {
                 setShowCelebration(false);
-                navigate('/inicio');
+                window.location.href = '/inicio';
               }}
               style={{
                 width: '100%',
