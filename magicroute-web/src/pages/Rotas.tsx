@@ -19,6 +19,7 @@ export default function Rotas() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [statusFiltro, setStatusFiltro] = useState('Todos');
+  const [baixaFiltro, setBaixaFiltro] = useState('NaoBaixadas');
   const [periodoFiltro, setPeriodoFiltro] = useState('Hoje');
   const [dataInicial, setDataInicial] = useState(() => {
     const today = new Date();
@@ -169,6 +170,16 @@ export default function Rotas() {
       (rota.Veiculo || '').toLowerCase().includes(busca.toLowerCase()) ||
       String(rota.IDLote).includes(busca);
 
+    const sit = (rota.SituacaoLote || rota.Situacao || '').toLowerCase();
+    const isBaixada = sit === 'concluido' || sit === 'concluído' || sit === 'entregue';
+
+    let matchBaixa = true;
+    if (baixaFiltro === 'NaoBaixadas') {
+      matchBaixa = !isBaixada;
+    } else if (baixaFiltro === 'Baixadas') {
+      matchBaixa = isBaixada;
+    }
+
     const pendente = Number(rota.Pendente || 0);
     const entregue = Number(rota.Entregue || 0);
     const emTransporte = Number(rota.EmTransporte || 0);
@@ -183,8 +194,9 @@ export default function Rotas() {
       }
     }
 
-    if (statusFiltro === 'Todos') return matchBusca;
-    return matchBusca && statusCalculado === statusFiltro;
+    const matchStatus = statusFiltro === 'Todos' || statusCalculado === statusFiltro;
+
+    return matchBusca && matchBaixa && matchStatus;
   });
 
   return (
@@ -314,6 +326,27 @@ export default function Rotas() {
             <option value="A iniciar">A iniciar</option>
             <option value="Em Transporte">Em Transporte</option>
             <option value="Entregue">Entregue</option>
+          </select>
+        </div>
+
+        {/* Filtro de Baixa */}
+        <div style={{ flex: 1, minWidth: '130px' }}>
+          <select 
+            value={baixaFiltro}
+            onChange={(e) => setBaixaFiltro(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: '1.5px solid #ced4da',
+              fontSize: '0.9rem',
+              outline: 'none',
+              background: '#ffffff'
+            }}
+          >
+            <option value="NaoBaixadas">Não Baixadas</option>
+            <option value="Baixadas">Baixadas</option>
+            <option value="Todas">Todas (Baixa)</option>
           </select>
         </div>
 
