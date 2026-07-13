@@ -669,6 +669,7 @@ router.get('/pendentes', async (req: Request, res: Response) => {
  * Importa uma lista de entregas em lote para um IDLote
  */
 router.post('/importar-lote', async (req: Request, res: Response) => {
+  console.log('[importar-lote] body recebido:', req.body);
   const { IdEmpresa, IDLote, Entregas, UsuarioNome } = req.body;
   if (!IdEmpresa || !IDLote || !Array.isArray(Entregas) || Entregas.length === 0) {
     return res.status(400).json({ sucesso: false, erro: 'Parâmetros inválidos ou lista de entregas vazia.' });
