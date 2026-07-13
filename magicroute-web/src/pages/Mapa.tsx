@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buscarEntregasPorLote, buscarPontosGPS } from '../services/api';
-import { Map as MapIcon, Loader2, List, ExternalLink, ArrowLeft } from 'lucide-react';
+import { Map as MapIcon, Loader2, List, ExternalLink, ArrowLeft, Truck } from 'lucide-react';
 import { GoogleMap, useJsApiLoader, DirectionsRenderer, MarkerF, InfoWindowF, PolylineF } from '@react-google-maps/api';
 
 const libraries: ("places" | "geometry" | "drawing" | "visualization")[] = ['places'];
@@ -23,33 +23,45 @@ export default function Mapa() {
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
   const [gpsPoints, setGpsPoints] = useState<any[]>([]);
   const [showRealPath, setShowRealPath] = useState(true);
+  const [hoveredDelivery, setHoveredDelivery] = useState<string | null>(null);
+  const [clickedPolyline, setClickedPolyline] = useState<any | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
     libraries
   });
 
+  const fetchEntregasAndGPS = async (silent = false) => {
+    if (!user || !idLote) {
+      if (!silent) setLoading(false);
+      return;
+    }
+    if (!silent) setLoading(true);
+    try {
+      const isAdm = user.tipoPessoaAtivo === 'Administrador';
+      const result = await buscarEntregasPorLote(user.idEmpresa, isAdm ? '' : user.codigo, idLote);
+      setEntregas(result || []);
+      
+      // Buscar histórico de GPS do motorista para o lote
+      const points = await buscarPontosGPS(idLote);
+      setGpsPoints(points || []);
+    } catch (err) {
+      console.error('Erro ao buscar entregas/GPS:', err);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchEntregasAndGPS = async () => {
-      if (!user || !idLote) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const isAdm = user.tipoPessoaAtivo === 'Administrador';
-        const result = await buscarEntregasPorLote(user.idEmpresa, isAdm ? '' : user.codigo, idLote);
-        setEntregas(result || []);
-        
-        // Buscar histórico de GPS do motorista para o lote
-        const points = await buscarPontosGPS(idLote);
-        setGpsPoints(points || []);
-      } catch (err) {
-        console.error('Erro ao buscar entregas/GPS:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEntregasAndGPS();
+    fetchEntregasAndGPS(false);
+
+    // Polling a cada 10 segundos
+    const interval = setInterval(() => {
+      fetchEntregasAndGPS(true);
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, [idLote, user]);
 
   useEffect(() => {
@@ -172,6 +184,79 @@ export default function Mapa() {
     return paths;
   };
 
+  const getDeliveryColor = (pedido: string) => {
+    const idx = entregas.findIndex(ent => String(ent.NumeroPedido || ent.NUMEROPEDIDO) === String(pedido));
+    if (idx === -1) return '#8c2cf5'; // padrão roxo
+    const colors = [
+      '#10b981', // Emerald
+      '#3b82f6', // Blue
+      '#f59e0b', // Amber
+      '#ef4444', // Red
+      '#8b5cf6', // Violet
+      '#06b6d4', // Cyan
+      '#ec4899', // Pink
+      '#14b8a6'  // Teal
+    ];
+    return colors[idx % colors.length];
+  };
+
+  const getDriverCurrentLocation = () => {
+    if (gpsPoints.length === 0) return null;
+    const sortedPoints = [...gpsPoints].sort((a, b) => {
+      const t1 = new Date(a.DataRegistro || a.dataRegistro || 0).getTime();
+      const t2 = new Date(b.DataRegistro || b.dataRegistro || 0).getTime();
+      return t1 - t2;
+    });
+    return sortedPoints[sortedPoints.length - 1];
+  };
+
+  const driverLocation = getDriverCurrentLocation();
+
+  const getActiveDelivery = () => {
+    const inTransit = entregas.find(ent => {
+      const status = (ent.StatusEntrega || ent.STATUSENTREGA || ent.situacaoentrega || '').toLowerCase();
+      return status.includes('transporte');
+    });
+    if (inTransit) return inTransit;
+
+    if (driverLocation) {
+      const match = entregas.find(ent => String(ent.NumeroPedido || ent.NUMEROPEDIDO) === String(driverLocation.NumeroPedido));
+      if (match) return match;
+    }
+
+    return entregas.find(ent => {
+      const status = (ent.StatusEntrega || ent.STATUSENTREGA || ent.situacaoentrega || '').toLowerCase();
+      return status.includes('pendente');
+    });
+  };
+
+  const activeDelivery = getActiveDelivery();
+
+  const truckSvgPath = 'M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm12 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm2-5.5h-3V9h3v4z';
+
+  const getDriverIcon = () => {
+    if (!window.google) return undefined;
+    return {
+      path: truckSvgPath,
+      fillColor: '#10b981',
+      fillOpacity: 1,
+      strokeColor: '#ffffff',
+      strokeWeight: 1.5,
+      scale: 1.4,
+      anchor: new window.google.maps.Point(12, 12)
+    };
+  };
+
+  const focusOnDriver = () => {
+    if (map && driverLocation) {
+      map.panTo({ lat: Number(driverLocation.Latitude), lng: Number(driverLocation.Longitude) });
+      map.setZoom(15);
+    }
+  };
+
+  const e_first = entregas[0] || {};
+  const nomeMotorista = e_first.NomeMotorista || e_first.Nome || e_first.NOMEMOTORISTA || `Motorista #${e_first.CodigoMotorista || ''}`;
+
   const renderGoogleMap = (height: string) => {
     if (loadError) return <div>Erro ao carregar o mapa. Verifique a chave de API.</div>;
     if (!isLoaded) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loader2 className="animate-spin" size={40} color="#8c2cf5" /></div>;
@@ -207,6 +292,7 @@ export default function Mapa() {
           mapContainerStyle={{ width: '100%', height: '100%' }}
           center={center}
           zoom={13}
+          onLoad={(map) => setMap(map)}
           options={{
             disableDefaultUI: false,
             zoomControl: true,
@@ -288,26 +374,220 @@ export default function Mapa() {
 
           {/* Renderizar trajeto do GPS real realizado pelo motorista */}
           {showRealPath && Object.entries(getGpsPathsByDelivery()).map(([pedido, path], idx) => {
-            const colors = ['#00e676', '#ff9100', '#2979ff', '#ff1744', '#d500f9', '#00e5ff'];
-            const color = colors[idx % colors.length];
+            const color = getDeliveryColor(pedido);
+            const isHovered = hoveredDelivery === pedido;
             return (
               <PolylineF
                 key={pedido}
                 path={path}
+                onClick={(e) => {
+                  setClickedPolyline({
+                    pedido,
+                    lat: e.latLng?.lat() || path[path.length - 1].lat,
+                    lng: e.latLng?.lng() || path[path.length - 1].lng
+                  });
+                }}
                 options={{
                   strokeColor: color,
-                  strokeOpacity: 0.95,
-                  strokeWeight: 5,
+                  strokeOpacity: isHovered ? 1.0 : (hoveredDelivery ? 0.35 : 0.85),
+                  strokeWeight: isHovered ? 8 : 5,
                   icons: window.google ? [{
-                    icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW },
-                    offset: '100%',
+                    icon: {
+                      path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                      scale: isHovered ? 4.5 : 3.5,
+                      fillColor: color,
+                      fillOpacity: 1,
+                      strokeColor: '#ffffff',
+                      strokeWeight: 1.5,
+                    },
+                    offset: '50px',
                     repeat: '100px'
                   }] : undefined
                 }}
               />
             );
           })}
+
+          {/* Linha dinâmica conectando o motorista à entrega ativa (Estilo Uber/iFood) */}
+          {driverLocation && activeDelivery && (
+            (() => {
+              const destLat = Number(activeDelivery.LatitudeEntrega || activeDelivery.Latitude || activeDelivery.LATITUDEENTREGA || activeDelivery.LATITUDE);
+              const destLng = Number(activeDelivery.LongitudeEntrega || activeDelivery.Longitude || activeDelivery.LONGITUDEENTREGA || activeDelivery.LONGITUDE);
+              if (isNaN(destLat) || isNaN(destLng) || destLat === 0 || destLng === 0) return null;
+              
+              return (
+                <PolylineF
+                  path={[
+                    { lat: Number(driverLocation.Latitude), lng: Number(driverLocation.Longitude) },
+                    { lat: destLat, lng: destLng }
+                  ]}
+                  options={{
+                    strokeColor: '#3b82f6',
+                    strokeOpacity: 0,
+                    icons: [{
+                      icon: {
+                        path: 'M 0,-1 0,1',
+                        strokeOpacity: 0.8,
+                        scale: 3,
+                        strokeColor: '#3b82f6',
+                        strokeWeight: 3
+                      },
+                      offset: '0',
+                      repeat: '15px'
+                    }]
+                  }}
+                />
+              );
+            })()
+          )}
+
+          {/* Marcador do Motorista em Tempo Real */}
+          {driverLocation && (
+            <MarkerF
+              position={{ lat: Number(driverLocation.Latitude), lng: Number(driverLocation.Longitude) }}
+              icon={getDriverIcon()}
+              onClick={() => setActiveMarker('driver')}
+            >
+              {activeMarker === 'driver' && (
+                <InfoWindowF onCloseClick={() => setActiveMarker(null)}>
+                  <div style={{ fontSize: '12px', padding: '4px', maxWidth: '240px', color: '#333' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                      <strong style={{ color: '#10b981' }}>Motorista Online (GPS)</strong>
+                    </div>
+                    <strong>Motorista:</strong> {nomeMotorista}<br />
+                    {activeDelivery ? (
+                      <>
+                        <strong>Indo para:</strong> {activeDelivery.NomeCliente}<br />
+                        <strong>Pedido:</strong> {activeDelivery.NumeroPedido}<br />
+                        <strong>Endereço:</strong> {activeDelivery.EnderecoEntrega}
+                      </>
+                    ) : (
+                      <span>Em trânsito</span>
+                    )}
+                  </div>
+                </InfoWindowF>
+              )}
+            </MarkerF>
+          )}
+
+          {/* Tooltip ao clicar no trajeto */}
+          {clickedPolyline && (
+            <InfoWindowF
+              position={{ lat: clickedPolyline.lat, lng: clickedPolyline.lng }}
+              onCloseClick={() => setClickedPolyline(null)}
+            >
+              <div style={{ fontSize: '12px', padding: '4px', maxWidth: '220px', color: '#333' }}>
+                <strong style={{ color: '#8c2cf5' }}>Trajeto de Entrega Realizado</strong><br />
+                {(() => {
+                  const match = entregas.find(ent => String(ent.NumeroPedido || ent.NUMEROPEDIDO) === String(clickedPolyline.pedido));
+                  if (!match) return `Pedido: ${clickedPolyline.pedido}`;
+                  return (
+                    <>
+                      <strong>Cliente:</strong> {match.NomeCliente}<br />
+                      <strong>Pedido:</strong> {match.NumeroPedido}<br />
+                      <strong>Status atual:</strong> {match.StatusEntrega}
+                    </>
+                  );
+                })()}
+              </div>
+            </InfoWindowF>
+          )}
         </GoogleMap>
+
+        {/* Card Flutuante de Rastreamento em Tempo Real */}
+        {driverLocation && (
+          <div style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+            borderRadius: '12px',
+            padding: '16px',
+            width: '320px',
+            zIndex: 10,
+            fontFamily: 'sans-serif'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="live-pulse" style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#10b981',
+                  boxShadow: '0 0 0 0 rgba(16, 185, 129, 0.7)'
+                }}></span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rastreamento ao Vivo</span>
+              </div>
+              <button 
+                onClick={focusOnDriver}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '4px 8px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: '#0f172a',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+              >
+                Focar Motorista
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: '#e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#475569'
+              }}>
+                <Truck size={18} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>{nomeMotorista}</p>
+                {activeDelivery ? (
+                  <>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                      Indo para: <strong style={{ color: '#0f172a' }}>{activeDelivery.NomeCliente}</strong>
+                    </p>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#94a3b8' }}>
+                      Parada #{entregas.findIndex(ent => String(ent.NumeroPedido || ent.NUMEROPEDIDO) === String(activeDelivery.NumeroPedido)) + 1} • Pedido: {activeDelivery.NumeroPedido}
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>Em deslocamento...</p>
+                )}
+              </div>
+            </div>
+            
+            <style>{`
+              .live-pulse {
+                animation: pulse 2s infinite;
+              }
+              @keyframes pulse {
+                0% {
+                  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+                }
+                70% {
+                  box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+                }
+                100% {
+                  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+                }
+              }
+            `}</style>
+          </div>
+        )}
       </div>
     );
   };
@@ -372,47 +652,176 @@ export default function Mapa() {
 
   // RENDERIZAÇÃO PARA ADMIN / DESKTOP
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '24px', background: '#ffffff', borderBottom: '1px solid #f1f3f5' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-          <button onClick={() => navigate(`/entregas?idLote=${idLote}`)} style={{ background: '#f8f9fa', border: 'none', borderRadius: '12px', padding: '10px', color: '#495057', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
-            <ArrowLeft size={20} />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: 'sans-serif' }}>
+      {/* Top Header */}
+      <div style={{ padding: '20px 24px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button onClick={() => navigate(`/entregas?idLote=${idLote}`)} style={{ background: '#f1f5f9', border: 'none', borderRadius: '10px', padding: '8px', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
+            <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: '#1e293b' }}>Visualização de Rota</h1>
-            <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#64748b' }}>
-              Lote #{idLote} • {entregas.length} paradas
+            <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Painel de Roteamento ao Vivo</h1>
+            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+              Lote #{idLote} • {entregas.length} paradas • {entregas.filter(ent => String(ent.StatusEntrega || ent.STATUSENTREGA || '').toLowerCase().includes('entregue') && !String(ent.StatusEntrega || ent.STATUSENTREGA || '').toLowerCase().includes('não')).length}/{entregas.length} concluídas
             </p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={() => navigate(`/entregas?idLote=${idLote}`)} style={{ background: '#f3f0ff', border: 'none', color: '#8c2cf5', padding: '10px 20px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }}>
-            <List size={16} /> Ver Lista de Entregas
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button onClick={() => navigate(`/entregas?idLote=${idLote}`)} style={{ background: '#f3f0ff', border: 'none', color: '#8c2cf5', padding: '8px 16px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s' }}>
+            <List size={14} /> Ver Lista
           </button>
           <button 
             onClick={() => setShowRealPath(!showRealPath)}
             style={{ 
-              background: showRealPath ? '#e6fcf5' : '#f1f3f5', 
-              border: '1.5px solid',
-              borderColor: showRealPath ? '#099268' : '#ced4da',
-              color: showRealPath ? '#099268' : '#495057', 
-              padding: '10px 20px', 
-              borderRadius: '10px', 
-              fontSize: '0.85rem', 
+              background: showRealPath ? '#ecfdf5' : '#f1f5f9', 
+              border: '1px solid',
+              borderColor: showRealPath ? '#059669' : '#cbd5e1',
+              color: showRealPath ? '#059669' : '#475569', 
+              padding: '8px 16px', 
+              borderRadius: '8px', 
+              fontSize: '0.8rem', 
               fontWeight: 700, 
               cursor: 'pointer', 
               display: 'flex', 
               alignItems: 'center', 
-              gap: '8px', 
+              gap: '6px', 
               transition: 'all 0.2s' 
             }}
           >
-            <MapIcon size={16} /> {showRealPath ? 'Ocultar Trajeto Real (GPS)' : 'Exibir Trajeto Real (GPS)'}
+            <MapIcon size={14} /> {showRealPath ? 'Ocultar Trajeto Real' : 'Exibir Trajeto Real'}
           </button>
         </div>
       </div>
-      <div style={{ flex: 1, position: 'relative' }}>
-        {renderGoogleMap('100%')}
+
+      {/* Main Content Side-by-Side */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Left Sidebar: Paradas e Legendas */}
+        <div style={{
+          width: '360px',
+          background: '#ffffff',
+          borderRight: '1px solid #e2e8f0',
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto'
+        }}>
+          <div style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+            <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Sequência de Paradas
+            </h3>
+            <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+              Passe o mouse sobre uma parada para destacar seu trajeto no mapa
+            </p>
+          </div>
+
+          <div style={{ flex: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Saída da Base */}
+            {entregas.length > 0 && (() => {
+              const first = entregas[0];
+              return (
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  <div style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: '#2a9d8f',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.75rem',
+                    fontWeight: 700
+                  }}>S</div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>
+                      Saída: {first.LocalSaida || 'Base Central'}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '240px' }}>
+                      {first.EnderecoLocalSaida}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Paradas do Lote */}
+            {entregas.map((ent, idx) => {
+              const pedido = ent.NumeroPedido || ent.NUMEROPEDIDO || '';
+              const color = getDeliveryColor(pedido);
+              const isHovered = hoveredDelivery === pedido;
+              const isDeliveryActive = activeDelivery && String(activeDelivery.NumeroPedido) === String(pedido);
+              
+              return (
+                <div 
+                  key={idx}
+                  onMouseEnter={() => setHoveredDelivery(pedido)}
+                  onMouseLeave={() => setHoveredDelivery(null)}
+                  onClick={() => {
+                    const lat = Number(ent.LatitudeEntrega || ent.Latitude);
+                    const lng = Number(ent.LongitudeEntrega || ent.Longitude);
+                    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                      map?.panTo({ lat, lng });
+                      map?.setZoom(15);
+                      setActiveMarker(`ent-${idx}`);
+                    }
+                  }}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '8px',
+                    background: isHovered ? '#f1f5f9' : (isDeliveryActive ? '#eff6ff' : '#ffffff'),
+                    border: `1px solid ${isDeliveryActive ? '#3b82f6' : (isHovered ? '#cbd5e1' : '#e2e8f0')}`,
+                    borderLeft: `4px solid ${color}`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    transition: 'all 0.2s',
+                    boxShadow: isHovered ? '0 4px 6px -1px rgba(0, 0, 0, 0.05)' : 'none'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b' }}>
+                      Parada {idx + 1} • Pedido {pedido}
+                    </span>
+                    <span style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: 
+                        String(ent.StatusEntrega || '').toLowerCase().includes('entregue') ? '#dcfce7' : 
+                        String(ent.StatusEntrega || '').toLowerCase().includes('transporte') ? '#dbeafe' : '#fef3c7',
+                      color: 
+                        String(ent.StatusEntrega || '').toLowerCase().includes('entregue') ? '#15803d' : 
+                        String(ent.StatusEntrega || '').toLowerCase().includes('transporte') ? '#1d4ed8' : '#b45309'
+                    }}>
+                      {ent.StatusEntrega || 'Pendente'}
+                    </span>
+                  </div>
+
+                  <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
+                    {ent.NomeCliente || 'Cliente'}
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {ent.EnderecoEntrega}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right Map Pane */}
+        <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+          {renderGoogleMap('100%')}
+        </div>
       </div>
     </div>
   );
