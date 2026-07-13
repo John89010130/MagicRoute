@@ -157,6 +157,13 @@ export async function salvarDataLote(idEmpresa: string, idLote: string, dataLote
   });
 }
 
+export async function alterarMotoristaLote(idEmpresa: string, idLote: string, codigoMotorista: number) {
+  return apiRequest('/api/entregas/alterar-motorista', {
+    method: 'PATCH',
+    body: { IDEmpresa: idEmpresa, IDLote: idLote, CodigoMotorista: codigoMotorista },
+  });
+}
+
 export async function buscarConfiguracoes(idEmpresa: string) {
   return apiRequest(`/api/configuracoes/empresa/${idEmpresa}`, {
     method: 'GET',

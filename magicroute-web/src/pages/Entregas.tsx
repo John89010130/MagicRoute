@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote, buscarConfiguracoes, finalizarLote, reabrirLote } from '../services/api';
+import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote, buscarConfiguracoes, finalizarLote, reabrirLote, listarMotoristas, alterarMotoristaLote } from '../services/api';
 import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload } from 'lucide-react';
 
 export default function Entregas() {
@@ -21,6 +21,8 @@ export default function Entregas() {
   const [formHoraSaida, setFormHoraSaida] = useState('');
   const [formTempoAtendimento, setFormTempoAtendimento] = useState('');
   const [formDataLote, setFormDataLote] = useState('');
+  const [motoristas, setMotoristas] = useState<any[]>([]);
+  const [selectedMotorista, setSelectedMotorista] = useState<string>('');
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -826,6 +828,8 @@ export default function Entregas() {
           setFormTempoAtendimento(result[0].TempoAtendimento.toString());
         }
 
+        setSelectedMotorista(String(result[0].CodigoMotorista || ''));
+
         const dataLoteBanco = result[0].DataLote || '';
         if (dataLoteBanco) {
           try {
@@ -871,6 +875,48 @@ export default function Entregas() {
       localStorage.removeItem('lote_recem_finalizado');
     }
   }, [idLote]);
+
+  useEffect(() => {
+    const fetchMotoristasList = async () => {
+      if (!user) return;
+      try {
+        const data = await listarMotoristas(user.idEmpresa);
+        setMotoristas(data || []);
+      } catch (err) {
+        console.error('Erro ao buscar motoristas:', err);
+      }
+    };
+    fetchMotoristasList();
+  }, [user]);
+
+  const handleMotoristaChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const novoCodigo = Number(e.target.value);
+    if (!novoCodigo || !user || !idLote) return;
+    const motNome = motoristas.find(m => Number(m.Codigo) === novoCodigo)?.Nome || `Motorista ${novoCodigo}`;
+    if (!window.confirm(`Deseja alterar o motorista deste lote para "${motNome}"?`)) {
+      if (entregas.length > 0) {
+        setSelectedMotorista(String(entregas[0].CodigoMotorista || ''));
+      }
+      return;
+    }
+    try {
+      await alterarMotoristaLote(user.idEmpresa, idLote, novoCodigo);
+      await criarLog(
+        Number(user.idEmpresa),
+        Number(idLote),
+        user.nomeUsuario,
+        'ALTERAR_MOTORISTA',
+        `Alterou o motorista do lote para ${motNome}`
+      );
+      alert('Motorista alterado com sucesso!');
+      window.location.reload();
+    } catch (err: any) {
+      alert('Erro ao alterar motorista: ' + err.message);
+      if (entregas.length > 0) {
+        setSelectedMotorista(String(entregas[0].CodigoMotorista || ''));
+      }
+    }
+  };
 
   const handleHoraSaidaBlur = async (e: any) => {
     if (!user || !idLote) return;
@@ -1682,6 +1728,24 @@ export default function Entregas() {
                 style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', fontWeight: 600, color: '#333' }}
               />
             </div>
+
+            {motoristas.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', background: '#f8f9fa', padding: '4px 8px', borderRadius: '8px', border: '1.5px solid #eaeaea' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginRight: '8px' }}>Motorista:</label>
+                <select 
+                  value={selectedMotorista}
+                  onChange={handleMotoristaChange}
+                  style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', fontWeight: 600, color: '#333', cursor: 'pointer' }}
+                >
+                  <option value="">Selecione...</option>
+                  {motoristas.map((m: any) => (
+                    <option key={m.Codigo} value={String(m.Codigo)}>
+                      {m.Nome || `Motorista ${m.Codigo}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div style={{ display: 'flex', alignItems: 'center', background: '#f8f9fa', padding: '4px 8px', borderRadius: '8px', border: '1.5px solid #eaeaea' }}>
               <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginRight: '8px' }}>Saída (opcional):</label>

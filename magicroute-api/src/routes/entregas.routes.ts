@@ -108,6 +108,28 @@ router.patch('/salvar-tempo-atendimento', async (req: Request, res: Response) =>
 });
 
 /**
+ * PATCH /api/entregas/alterar-motorista
+ * Atualiza o motorista designado para o lote
+ */
+router.patch('/alterar-motorista', async (req: Request, res: Response) => {
+  const { IDEmpresa, IDLote, CodigoMotorista } = req.body;
+  if (!IDEmpresa || !IDLote || !CodigoMotorista) {
+    return res.status(400).json({ sucesso: false, mensagem: 'Faltam parâmetros (IDEmpresa, IDLote ou CodigoMotorista).' });
+  }
+
+  try {
+    await executeQuery(`
+      UPDATE startapp_magicroute..Lotes 
+      SET CodigoMotorista = ${Number(CodigoMotorista)}
+      WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}
+    `);
+    res.json({ sucesso: true, mensagem: 'Motorista do lote alterado com sucesso.' });
+  } catch (err: any) {
+    res.status(500).json({ sucesso: false, mensagem: err.message });
+  }
+});
+
+/**
  * PATCH /api/entregas/salvar-data-lote
  * Atualiza a data do lote inteiro e todas as entregas do lote
  */
