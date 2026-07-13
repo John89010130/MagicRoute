@@ -30,13 +30,13 @@ async function test() {
         ,count(case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) then le.NumeroPedido end) EntregasDia
         ,count(case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) and le.StatusEntrega IN ('Finalizada', 'Entregue') then le.NumeroPedido end) EntregasFinalizadasDia
         ,count(distinct case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) then le.IDLote end) RotasDia
-        ,count(case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) and l.Situacao IN ('Concluido', 'Concluído', 'Entregue') then le.NumeroPedido end) RotasFinalizadasDia
+        ,count(distinct case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) and l.Situacao IN ('Concluido', 'Concluído', 'Entregue') then le.IDLote end) RotasFinalizadasDia
         ,iif(count(case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) then le.NumeroPedido end) > 0
-            ,cast(isnull(count(case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) and le.StatusEntrega IN ('Finalizada', 'Entregue') then le.NumeroPedido end), 1) as float) / count(case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) then le.NumeroPedido end) 
+            ,cast(isnull(count(case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) and le.StatusEntrega IN ('Finalizada', 'Entregue') then le.NumeroPedido end), 0) as float) / count(case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) then le.NumeroPedido end) 
             ,0
           ) PercentEntregasDia
         ,iif(count(distinct case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) then le.IDLote end) > 0
-            ,cast(isnull(count(case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) and l.Situacao IN ('Concluido', 'Concluído', 'Entregue') then le.NumeroPedido end), 1) as float) / count(distinct case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) then le.IDLote end) 
+            ,cast(count(distinct case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) and l.Situacao IN ('Concluido', 'Concluído', 'Entregue') then le.IDLote end) as float) / count(distinct case when TRY_CONVERT(DATE, le.DataEntrega, 103) = cast(getdate() as date) then le.IDLote end) 
             ,0
           ) PercentRotasDia
       from startapp_magicroute..LotesEntregas LE
