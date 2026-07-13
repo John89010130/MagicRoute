@@ -6,6 +6,17 @@ interface RequestOptions {
   body?: Record<string, any>;
 }
 
+// Limpar URLs legadas antigas (Ngrok/Localtunnel) salvas no LocalStorage dos clientes
+try {
+  const savedUrl = localStorage.getItem('CUSTOM_API_URL');
+  if (savedUrl && (savedUrl.includes('ngrok') || savedUrl.includes('loca.lt'))) {
+    localStorage.removeItem('CUSTOM_API_URL');
+    console.log('[API] URL customizada legada removida do LocalStorage.');
+  }
+} catch (e) {
+  console.error('Erro ao limpar LocalStorage:', e);
+}
+
 async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', params, body } = options;
 
