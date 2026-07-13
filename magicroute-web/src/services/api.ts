@@ -238,6 +238,10 @@ export async function adicionarEntrega(body: any) {
   return apiRequest('/AdicionarEntrega', { method: 'POST', body });
 }
 
+export async function importarEntregasLote(body: { IdEmpresa: string; IDLote: string; Entregas: any[]; UsuarioNome: string }) {
+  return apiRequest('/entregas/importar-lote', { method: 'POST', body });
+}
+
 export async function editarEntrega(body: any) {
   return apiRequest('/EditarEntrega', { method: 'POST', body });
 }

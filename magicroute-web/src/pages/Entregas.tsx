@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS } from '../services/api';
-import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History } from 'lucide-react';
+import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote } from '../services/api';
+import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload } from 'lucide-react';
 
 export default function Entregas() {
   const { user } = useAuth();
@@ -51,6 +51,364 @@ export default function Entregas() {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [gpsTrace, setGpsTrace] = useState<any>(null);
   const [loadingGpsTrace, setLoadingGpsTrace] = useState(false);
+
+  // States para Importação de Planilha
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importLoading, setImportLoading] = useState(false);
+
+  const handleDownloadTemplate = () => {
+    const headers = [
+      'NumeroPedido',
+      'NrNotaFiscal',
+      'NomeCliente',
+      'EnderecoEntrega',
+      'Bairro',
+      'Cidade',
+      'CEP',
+      'UFEntrega',
+      'ValorRecebido',
+      'TipoPagamento',
+      'DataEntrega',
+      'LatitudeEntrega',
+      'LongitudeEntrega',
+      'Observacoes',
+      'HoraRecebimentoInicio1',
+      'HoraRecebimentoFim1',
+      'HoraRecebimentoInicio2',
+      'HoraRecebimentoFim2'
+    ];
+    
+    // Duas linhas de exemplo prontas (uma com endereço, outra com lat/lng)
+    const row1 = [
+      'P001',
+      'NF101A',
+      'Cliente Exemplo 1',
+      'Av. Paulista, 1000',
+      'Bela Vista',
+      'São Paulo',
+      '01310-100',
+      'SP',
+      '150.50',
+      'Pix',
+      '15/07/2026',
+      '',
+      '',
+      'Cuidado ao descarregar no local',
+      '08:00',
+      '11:30',
+      '',
+      ''
+    ];
+    const row2 = [
+      'P002',
+      'NF102B',
+      'Cliente Exemplo 2',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '0.00',
+      'A Faturar',
+      '15/07/2026',
+      '-23.5612',
+      '-46.6553',
+      'Entregar para o porteiro',
+      '',
+      '',
+      '',
+      ''
+    ];
+    
+    const csvContent = '\uFEFF' + [headers.join(';'), row1.join(';'), row2.join(';'), ''].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `modelo_importacao_lote_${idLote}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+      
+      const lines = text.split(/\r?\n/);
+      if (lines.length <= 1) {
+        setImportErrors(['A planilha está vazia ou sem cabeçalhos.']);
+        return;
+      }
+      
+      const headerLine = lines[0];
+      let separator = ';';
+      if (headerLine.includes(',') && !headerLine.includes(';')) {
+        separator = ',';
+      }
+      
+      const headers = headerLine.split(separator).map(h => h.replace(/^"|"$/g, '').trim());
+      const parsedItems: any[] = [];
+      const errors: string[] = [];
+      
+      const colIndex = (name: string) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+      
+      const idxPedido = colIndex('NumeroPedido');
+      const idxNota = colIndex('NrNotaFiscal');
+      const idxCliente = colIndex('NomeCliente');
+      const idxEndereco = colIndex('EnderecoEntrega');
+      const idxBairro = colIndex('Bairro');
+      const idxCidade = colIndex('Cidade');
+      const idxCep = colIndex('CEP');
+      const idxUf = colIndex('UFEntrega');
+      const idxValor = colIndex('ValorRecebido');
+      const idxPagamento = colIndex('TipoPagamento');
+      const idxData = colIndex('DataEntrega');
+      const idxLat = colIndex('LatitudeEntrega');
+      const idxLng = colIndex('LongitudeEntrega');
+      const idxObs = colIndex('Observacoes');
+      const idxHInicio1 = colIndex('HoraRecebimentoInicio1');
+      const idxHFim1 = colIndex('HoraRecebimentoFim1');
+      const idxHInicio2 = colIndex('HoraRecebimentoInicio2');
+      const idxHFim2 = colIndex('HoraRecebimentoFim2');
+      
+      if (idxPedido === -1 || idxNota === -1 || idxCliente === -1) {
+        setImportErrors(['Cabeçalhos obrigatórios ausentes. Certifique-se de que a planilha possui as colunas: NumeroPedido, NrNotaFiscal, NomeCliente.']);
+        return;
+      }
+      
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        let rowCells: string[] = [];
+        if (separator === ';') {
+          rowCells = line.split(';').map(c => c.replace(/^"|"$/g, '').trim());
+        } else {
+          const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+          rowCells = matches ? matches.map(c => c.replace(/^"|"$/g, '').trim()) : line.split(',').map(c => c.trim());
+        }
+        
+        const getValue = (idx: number) => (idx !== -1 && rowCells[idx] !== undefined) ? rowCells[idx] : '';
+        
+        const numLinha = i + 1;
+        const pedido = getValue(idxPedido);
+        const nota = getValue(idxNota);
+        const cliente = getValue(idxCliente);
+        const endereco = getValue(idxEndereco);
+        const bairro = getValue(idxBairro);
+        const cidade = getValue(idxCidade);
+        const cep = getValue(idxCep);
+        const uf = getValue(idxUf) || 'SP';
+        const valorStr = getValue(idxValor) || '0';
+        const pagamento = getValue(idxPagamento) || 'A Faturar';
+        const dataStr = getValue(idxData);
+        const latStr = getValue(idxLat);
+        const lngStr = getValue(idxLng);
+        const obs = getValue(idxObs);
+        const hInicio1 = getValue(idxHInicio1);
+        const hFim1 = getValue(idxHFim1);
+        const hInicio2 = getValue(idxHInicio2);
+        const hFim2 = getValue(idxHFim2);
+        
+        if (!pedido) {
+          errors.push(`Linha ${numLinha}: Coluna 'NumeroPedido' está vazia.`);
+          continue;
+        }
+        if (!nota) {
+          errors.push(`Linha ${numLinha}: Coluna 'NrNotaFiscal' está vazia.`);
+          continue;
+        }
+        if (!cliente) {
+          errors.push(`Linha ${numLinha}: Coluna 'NomeCliente' está vazia.`);
+          continue;
+        }
+        
+        const latNum = parseFloat(latStr.replace(',', '.'));
+        const lngNum = parseFloat(lngStr.replace(',', '.'));
+        const hasCoords = !isNaN(latNum) && !isNaN(lngNum) && latNum !== 0 && lngNum !== 0;
+        
+        if (!endereco.trim() && !hasCoords) {
+          errors.push(`Linha ${numLinha} (Pedido ${pedido}): Deve conter 'EnderecoEntrega' ou 'LatitudeEntrega' e 'LongitudeEntrega' válidos.`);
+          continue;
+        }
+        
+        const valor = parseFloat(valorStr.replace(',', '.'));
+        if (isNaN(valor)) {
+          errors.push(`Linha ${numLinha} (Pedido ${pedido}): Coluna 'ValorRecebido' deve ser numérica (valor informado: '${valorStr}').`);
+          continue;
+        }
+        
+        parsedItems.push({
+          NumeroPedido: pedido,
+          NrNotaFiscal: nota,
+          NomeCliente: cliente,
+          EnderecoEntrega: endereco,
+          Bairro: bairro,
+          Cidade: cidade,
+          CEP: cep,
+          UFEntrega: uf,
+          ValorRecebido: valor,
+          TipoPagamento: pagamento,
+          DataEntrega: dataStr,
+          LatitudeEntrega: hasCoords ? String(latNum) : '',
+          LongitudeEntrega: hasCoords ? String(lngNum) : '',
+          Observacoes: obs,
+          HoraRecebimentoInicio1: hInicio1,
+          HoraRecebimentoFim1: hFim1,
+          HoraRecebimentoInicio2: hInicio2,
+          HoraRecebimentoFim2: hFim2
+        });
+      }
+      
+      setImportData(parsedItems);
+      setImportErrors(errors);
+    };
+    reader.readAsText(file, 'UTF-8');
+  };
+
+  const handleConfirmImport = async () => {
+    if (!user || !idLote || importData.length === 0) return;
+    setImportLoading(true);
+    try {
+      const res = await importarEntregasLote({
+        IdEmpresa: user.idEmpresa,
+        IDLote: idLote,
+        Entregas: importData,
+        UsuarioNome: user.nomeUsuario
+      });
+      if (res && res.sucesso) {
+        setShowImportModal(false);
+        alert(res.mensagem || 'Importação realizada com sucesso!');
+        fetchEntregas();
+      } else {
+        alert('Erro ao importar: ' + (res.erro || 'Desconhecido'));
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro de conexão ao importar entregas: ' + err.message);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const renderImportModal = () => {
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(15,23,42,0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 200,
+        padding: '20px',
+        boxSizing: 'border-box'
+      }}>
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '20px',
+          width: '100%',
+          maxWidth: '580px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          padding: '28px',
+          boxShadow: '0 25px 60px rgba(0,0,0,0.2)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '18px',
+          fontFamily: "sans-serif",
+          boxSizing: 'border-box'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>Importar Planilha de Entregas</h3>
+              <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>Selecione o arquivo CSV ou Excel com as entregas.</p>
+            </div>
+            <span style={{ fontSize: '0.75rem', color: '#8c2cf5', background: '#f3f0ff', padding: '4px 8px', borderRadius: '4px', fontWeight: 600 }}>Lote #{idLote}</span>
+          </div>
+
+          {/* Passo 1: Download de Modelo */}
+          <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e9ecef' }}>
+            <div>
+              <h5 style={{ margin: 0, fontSize: '0.85rem', color: '#495057', fontWeight: 700 }}>1. Planilha Modelo de Exemplo</h5>
+              <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#868e96' }}>Baixe o modelo pré-formatado para preencher.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              style={{ background: '#ffffff', border: '1.5px solid #8c2cf5', color: '#8c2cf5', padding: '8px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              Baixar Modelo
+            </button>
+          </div>
+
+          {/* Passo 2: Upload de Arquivo */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>2. Upload do Arquivo (.csv)</label>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleFileChange}
+              style={{ padding: '12px', borderRadius: '10px', border: '1.5px dashed #ced4da', background: '#f8f9fe', outline: 'none', cursor: 'pointer', fontSize: '0.85rem' }}
+            />
+          </div>
+
+          {/* Resultados de Validação */}
+          {(importData.length > 0 || importErrors.length > 0) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <h5 style={{ margin: 0, fontSize: '0.8rem', color: '#495057', fontWeight: 700 }}>Resumo do Processamento:</h5>
+              
+              {/* Sucesso */}
+              {importData.length > 0 && (
+                <div style={{ background: 'rgba(40, 167, 69, 0.1)', border: '1px solid rgba(40, 167, 69, 0.2)', padding: '10px 14px', borderRadius: '8px', color: '#28a745', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                  <Check size={16} /> ✓ {importData.length} entregas válidas e prontas para importação.
+                </div>
+              )}
+              
+              {/* Erros */}
+              {importErrors.length > 0 && (
+                <div style={{ background: 'rgba(220, 53, 69, 0.08)', border: '1px solid rgba(220, 53, 69, 0.15)', padding: '12px 14px', borderRadius: '8px', color: '#dc3545', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>⚠️ Encontrados {importErrors.length} erros de validação:</strong>
+                  <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '8px' }}>
+                    {importErrors.map((err, idx) => (
+                      <span key={idx}>• {err}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Botões de Ação */}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '14px', borderTop: '1px solid #f1f5f9', marginTop: '8px' }}>
+            <button
+              onClick={() => setShowImportModal(false)}
+              style={{ padding: '10px 18px', border: '1.5px solid #e2e8f0', borderRadius: '10px', background: '#fff', color: '#64748b', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem' }}
+              disabled={importLoading}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmImport}
+              style={{ padding: '10px 24px', border: 'none', borderRadius: '10px', background: (importLoading || importData.length === 0) ? '#d1d5db' : 'linear-gradient(135deg, #8c2cf5, #6d28d9)', color: '#fff', fontWeight: 700, cursor: (importLoading || importData.length === 0) ? 'not-allowed' : 'pointer', fontSize: '0.875rem', boxShadow: (importLoading || importData.length === 0) ? 'none' : '0 4px 14px rgba(140,44,245,0.3)' }}
+              disabled={importLoading || importData.length === 0}
+            >
+              {importLoading ? 'Importando...' : 'Confirmar Importação'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const fetchLoteLogs = async () => {
     if (!user || !idLote) return;
@@ -1276,6 +1634,17 @@ export default function Entregas() {
               </span>
             )}
             <button 
+              onClick={() => {
+                setImportFile(null);
+                setImportData([]);
+                setImportErrors([]);
+                setShowImportModal(true);
+              }}
+              style={{ background: '#ffffff', border: '1.5px solid #eaeaea', borderRadius: '8px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#495057', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
+            >
+              <Upload size={16} /> Importar Planilha
+            </button>
+            <button 
               onClick={handleOpenAdd}
               style={{ background: '#8c2cf5', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', boxShadow: '0 2px 8px rgba(140, 44, 245, 0.2)' }}
             >
@@ -1550,6 +1919,9 @@ export default function Entregas() {
 
         {/* Modal de Editar Entrega */}
         {showEditModal && renderFormModal('Editar Entrega', handleEditSubmit, false)}
+
+        {/* Modal de Importar Planilha */}
+        {showImportModal && renderImportModal()}
 
         {/* Romaneio de Impressão para o Motorista */}
         {renderRomaneio()}

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { execAndRespond, sanitize, requireParam } from '../services/sql.service';
-import { executeQuery } from '../config/database';
+import { executeQuery, getPool } from '../config/database';
 
 const router = Router();
 
@@ -662,6 +662,119 @@ router.get('/pendentes', async (req: Request, res: Response) => {
     ORDER BY sequenciaforcada, sequencia ASC`;
 
   await execAndRespond(query, res);
+});
+
+/**
+ * POST /api/entregas/importar-lote
+ * Importa uma lista de entregas em lote para um IDLote
+ */
+router.post('/importar-lote', async (req: Request, res: Response) => {
+  const { IdEmpresa, IDLote, Entregas, UsuarioNome } = req.body;
+  if (!IdEmpresa || !IDLote || !Array.isArray(Entregas) || Entregas.length === 0) {
+    return res.status(400).json({ sucesso: false, erro: 'Parâmetros inválidos ou lista de entregas vazia.' });
+  }
+
+  try {
+    const pool = await getPool();
+    const transaction = pool.transaction();
+    await transaction.begin();
+
+    try {
+      // 1. Obter maior sequencia original atual
+      const seqResult = await transaction.request().query(`
+        SELECT ISNULL(MAX(SequenciaOriginal), 0) AS MaxSeq 
+        FROM startapp_magicroute..LotesEntregas 
+        WHERE IDEmpresa = ${Number(IdEmpresa)} AND IDLote = ${Number(IDLote)}
+      `);
+      let seq = seqResult.recordset[0].MaxSeq || 0;
+
+      const today = new Date();
+      const dd = String(today.getDate()).padStart(2, '0');
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const yyyy = today.getFullYear();
+      const hojeStr = `${dd}/${mm}/${yyyy}`;
+
+      for (const entrega of Entregas) {
+        seq++;
+        
+        const pedido = sanitize(String(entrega.NumeroPedido || ''));
+        const nota = sanitize(String(entrega.NrNotaFiscal || ''));
+        const cliente = sanitize(String(entrega.NomeCliente || ''));
+        const endereco = sanitize(String(entrega.EnderecoEntrega || ''));
+        const bairro = sanitize(String(entrega.Bairro || ''));
+        const cidade = sanitize(String(entrega.Cidade || ''));
+        const cep = sanitize(String(entrega.CEP || ''));
+        const uf = sanitize(String(entrega.UFEntrega || 'SP'));
+        const valor = Number(entrega.ValorRecebido || 0);
+        const pagamento = sanitize(String(entrega.TipoPagamento || 'A Faturar'));
+        const obs = sanitize(String(entrega.Observacoes || ''));
+        
+        let dataEntrega = sanitize(String(entrega.DataEntrega || hojeStr));
+        if (dataEntrega.includes('-')) {
+          const parts = dataEntrega.split('-');
+          dataEntrega = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        const lat = entrega.LatitudeEntrega !== undefined && entrega.LatitudeEntrega !== '' ? `'${sanitize(String(entrega.LatitudeEntrega))}'` : 'NULL';
+        const lng = entrega.LongitudeEntrega !== undefined && entrega.LongitudeEntrega !== '' ? `'${sanitize(String(entrega.LongitudeEntrega))}'` : 'NULL';
+
+        const horaInicio1 = sanitize(String(entrega.HoraRecebimentoInicio1 || ''));
+        const horaFim1 = sanitize(String(entrega.HoraRecebimentoFim1 || ''));
+        const horaInicio2 = sanitize(String(entrega.HoraRecebimentoInicio2 || ''));
+        const horaFim2 = sanitize(String(entrega.HoraRecebimentoFim2 || ''));
+
+        // Validação extra no backend
+        if (!pedido || !nota || !cliente) {
+          throw new Error(`Dados obrigatórios ausentes para o cliente ${cliente || '(Desconhecido)'}.`);
+        }
+        if (!endereco && (lat === 'NULL' || lng === 'NULL')) {
+          throw new Error(`Entrega do pedido ${pedido} deve possuir Endereço ou Latitude e Longitude.`);
+        }
+
+        const queryInsert = `
+          INSERT INTO startapp_magicroute..LotesEntregas (
+            IDEmpresa, IDLote, NumeroPedido, NrNotaFiscal, NomeCliente, EnderecoEntrega, 
+            Bairro, Cidade, CEP, StatusEntrega, DataPedido, DataEntrega, 
+            StatusRoteirizacao, SequenciaOriginal, SequenciaRoteirizada, DataCriacao, UFEntrega, Pais,
+            ValorRecebido, TipoPagamento, Observacoes, DocumentoRecebedor, NomeRecebimento,
+            UsuarioCriacao, LatitudeEntrega, LongitudeEntrega,
+            HoraRecebimentoInicio1, HoraRecebimentoFim1, HoraRecebimentoInicio2, HoraRecebimentoFim2
+          ) VALUES (
+            ${Number(IdEmpresa)}, ${Number(IDLote)}, '${pedido}', '${nota}', '${cliente}', '${endereco}', 
+            '${bairro}', '${cidade}', '${cep}', 'Pendente', '${hojeStr}', '${dataEntrega}', 
+            'Pendente', ${seq}, ${seq}, '${hojeStr}', '${uf}', 'Brasil',
+            ${valor}, '${pagamento}', '${obs}', '', '',
+            1, ${lat}, ${lng},
+            '${horaInicio1}', '${horaFim1}', '${horaInicio2}', '${horaFim2}'
+          )
+        `;
+        await transaction.request().query(queryInsert);
+      }
+
+      await transaction.commit();
+
+      // Gravar log da importação em lote
+      try {
+        await registrarLogInterno({
+          idEmpresa: Number(IdEmpresa),
+          idLote: Number(IDLote),
+          usuario: sanitize(UsuarioNome || 'Admin'),
+          tipoAcao: 'ALTERACAO_ADM',
+          descricao: `Importou ${Entregas.length} entregas em lote a partir de planilha.`
+        });
+      } catch (logErr) {
+        console.error('Erro ao salvar log de importação em lote:', logErr);
+      }
+
+      res.json({ sucesso: true, mensagem: `Importadas ${Entregas.length} entregas com sucesso.` });
+    } catch (innerErr: any) {
+      await transaction.rollback();
+      throw innerErr;
+    }
+  } catch (err: any) {
+    console.error('Erro ao importar entregas em lote:', err);
+    res.status(500).json({ sucesso: false, erro: err.message });
+  }
 });
 
 export default router;
