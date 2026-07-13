@@ -16,7 +16,8 @@ import {
   MapPin,
   Settings,
   X,
-  Check
+  Check,
+  Users
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { buscarLogs, marcarLogsLidos } from '../services/api';
@@ -197,8 +198,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </NavLink>
 
           <NavLink to="/usuarios" className={({ isActive }) => `nav-link-adm ${isActive ? 'active' : ''}`}>
+            <Users size={18} />
+            Usuários / Motoristas
+          </NavLink>
+
+          <NavLink to="/veiculos" className={({ isActive }) => `nav-link-adm ${isActive ? 'active' : ''}`}>
             <Truck size={18} />
-            Usuarios / Motoristas
+            Veículos
           </NavLink>
 
           <NavLink to="/locais" className={({ isActive }) => `nav-link-adm ${isActive ? 'active' : ''}`}>

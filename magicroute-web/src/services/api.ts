@@ -298,6 +298,18 @@ export async function listarVeiculos(idEmpresa: string) {
   return apiRequest('/ListarVeiculos', { params: { IdEmpresa: idEmpresa } });
 }
 
+export async function adicionarVeiculo(body: any) {
+  return apiRequest('/AdicionarVeiculo', { method: 'POST', body });
+}
+
+export async function editarVeiculo(body: any) {
+  return apiRequest('/EditarVeiculo', { method: 'POST', body });
+}
+
+export async function excluirVeiculo(body: any) {
+  return apiRequest('/ExcluirVeiculo', { method: 'POST', body });
+}
+
 // ==========================================
 // Logs e Notificações (LogsMagicRoute)
 // ==========================================

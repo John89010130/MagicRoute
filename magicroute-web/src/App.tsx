@@ -10,6 +10,7 @@ import Mapa from './pages/Mapa';
 import Usuarios from './pages/Usuarios';
 import Locais from './pages/Locais';
 import Configuracoes from './pages/Configuracoes';
+import Veiculos from './pages/Veiculos';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -56,6 +57,10 @@ function AppRoutes() {
       <Route
         path="/locais"
         element={<ProtectedRoute><Locais /></ProtectedRoute>}
+      />
+      <Route
+        path="/veiculos"
+        element={<ProtectedRoute><Veiculos /></ProtectedRoute>}
       />
       <Route
         path="/configuracoes"

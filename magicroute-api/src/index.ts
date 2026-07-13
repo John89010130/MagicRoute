@@ -1044,6 +1044,91 @@ app.get('/ListarVeiculos', async (req, res) => {
   }
 });
 
+app.post('/AdicionarVeiculo', async (req, res) => {
+  const idEmpresa = sanitize(String(req.body.IdEmpresa || ''));
+  if (!requireParam(idEmpresa, 'IdEmpresa', res)) return;
+
+  const veiculo = sanitize(String(req.body.Veiculo || ''));
+  if (!requireParam(veiculo, 'Veiculo', res)) return;
+
+  const tipoCombustivel = sanitize(String(req.body.TipoCombustivel || 'Flex'));
+  const placaEntrega = sanitize(String(req.body.PlacaEntrega || ''));
+  const urlVeiculo = sanitize(String(req.body.UrlVeiculo || ''));
+
+  try {
+    const pool = await getPool();
+    const nextCodeResult = await pool.request().query(`
+      SELECT ISNULL(MAX(CodigoVeiculo), 0) + 1 AS NextCode 
+      FROM startapp_magicroute..Veiculos 
+      WHERE IdEmpresa = ${idEmpresa}
+    `);
+    const nextCode = nextCodeResult.recordset[0].NextCode || 1;
+
+    await pool.request().query(`
+      INSERT INTO startapp_magicroute..Veiculos (
+        IdEmpresa, CodigoVeiculo, Veiculo, TipoCombustivel, PlacaEntrega, UrlVeiculo
+      ) VALUES (
+        ${idEmpresa}, ${nextCode}, '${veiculo}', '${tipoCombustivel}', '${placaEntrega}', '${urlVeiculo}'
+      )
+    `);
+    res.json({ sucesso: true, mensagem: 'Veículo adicionado com sucesso.' });
+  } catch (err: any) {
+    console.error('Erro ao adicionar veículo:', err);
+    res.status(500).json({ sucesso: false, erro: err.message });
+  }
+});
+
+app.post('/EditarVeiculo', async (req, res) => {
+  const idEmpresa = sanitize(String(req.body.IdEmpresa || ''));
+  if (!requireParam(idEmpresa, 'IdEmpresa', res)) return;
+
+  const codigoVeiculo = sanitize(String(req.body.CodigoVeiculo || ''));
+  if (!requireParam(codigoVeiculo, 'CodigoVeiculo', res)) return;
+
+  const veiculo = sanitize(String(req.body.Veiculo || ''));
+  if (!requireParam(veiculo, 'Veiculo', res)) return;
+
+  const tipoCombustivel = sanitize(String(req.body.TipoCombustivel || 'Flex'));
+  const placaEntrega = sanitize(String(req.body.PlacaEntrega || ''));
+  const urlVeiculo = sanitize(String(req.body.UrlVeiculo || ''));
+
+  try {
+    const pool = await getPool();
+    await pool.request().query(`
+      UPDATE startapp_magicroute..Veiculos 
+      SET Veiculo = '${veiculo}', 
+          TipoCombustivel = '${tipoCombustivel}', 
+          PlacaEntrega = '${placaEntrega}', 
+          UrlVeiculo = '${urlVeiculo}' 
+      WHERE IdEmpresa = ${idEmpresa} AND CodigoVeiculo = ${codigoVeiculo}
+    `);
+    res.json({ sucesso: true, mensagem: 'Veículo atualizado com sucesso.' });
+  } catch (err: any) {
+    console.error('Erro ao editar veículo:', err);
+    res.status(500).json({ sucesso: false, erro: err.message });
+  }
+});
+
+app.post('/ExcluirVeiculo', async (req, res) => {
+  const idEmpresa = sanitize(String(req.body.IdEmpresa || ''));
+  if (!requireParam(idEmpresa, 'IdEmpresa', res)) return;
+
+  const codigoVeiculo = sanitize(String(req.body.CodigoVeiculo || ''));
+  if (!requireParam(codigoVeiculo, 'CodigoVeiculo', res)) return;
+
+  try {
+    const pool = await getPool();
+    await pool.request().query(`
+      DELETE FROM startapp_magicroute..Veiculos 
+      WHERE IdEmpresa = ${idEmpresa} AND CodigoVeiculo = ${codigoVeiculo}
+    `);
+    res.json({ sucesso: true, mensagem: 'Veículo excluído com sucesso.' });
+  } catch (err: any) {
+    console.error('Erro ao excluir veículo:', err);
+    res.status(500).json({ sucesso: false, erro: err.message });
+  }
+});
+
 // ==========================================
 // Iniciar servidor
 // ==========================================
