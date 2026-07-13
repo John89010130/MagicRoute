@@ -3,6 +3,44 @@ import { useAuth } from '../contexts/AuthContext';
 import { listarUsuarios, adicionarUsuario, editarUsuario, excluirUsuario } from '../services/api';
 import { Truck, Shield, Users, Plus, Edit, Trash2, ShieldAlert, Key, Eye, EyeOff, Loader2 } from 'lucide-react';
 
+const compressAndConvertBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 400;
+        const MAX_HEIGHT = 400;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.75); // compress quality 75%
+        resolve(dataUrl);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 export default function Usuarios() {
   const { user } = useAuth();
   const [usuarios, setUsuarios] = useState<any[]>([]);
@@ -18,6 +56,7 @@ export default function Usuarios() {
   const [formCodigo, setFormCodigo] = useState('');
   const [formNome, setFormNome] = useState('');
   const [formSenha, setFormSenha] = useState('');
+  const [formUrlFoto, setFormUrlFoto] = useState('');
   const [formTipoPessoa, setFormTipoPessoa] = useState('M'); // A, M, A/M
   const [formSituacao, setFormSituacao] = useState('Ativo'); // Ativo, Inativo
   const [formCpf, setFormCpf] = useState('');
@@ -49,6 +88,7 @@ export default function Usuarios() {
     setFormCodigo('');
     setFormNome('');
     setFormSenha('');
+    setFormUrlFoto('');
     setFormTipoPessoa('M');
     setFormSituacao('Ativo');
     setFormCpf('');
@@ -64,6 +104,7 @@ export default function Usuarios() {
     setFormCodigo(String(u.Codigo));
     setFormNome(u.Nome || '');
     setFormSenha(u.Senha || '');
+    setFormUrlFoto(u.UrlFoto || u.urlfoto || '');
     setFormTipoPessoa(u.TipoPessoa || u.tipopessoa || 'M');
     setFormSituacao(u.Situacao || u.situacao || 'Ativo');
     setFormCpf(u.CPF || '');
@@ -87,6 +128,7 @@ export default function Usuarios() {
         Codigo: formCodigo ? Number(formCodigo) : undefined,
         Nome: formNome,
         Senha: formSenha,
+        UrlFoto: formUrlFoto,
         TipoPessoa: formTipoPessoa,
         Situacao: formSituacao,
         CPF: formCpf || '0',
@@ -120,6 +162,7 @@ export default function Usuarios() {
         Codigo: Number(formCodigo),
         Nome: formNome,
         Senha: formSenha,
+        UrlFoto: formUrlFoto,
         TipoPessoa: formTipoPessoa,
         Situacao: formSituacao,
         CPF: formCpf || '0',
@@ -196,6 +239,46 @@ export default function Usuarios() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #f1f3f5', paddingBottom: '12px', boxSizing: 'border-box' }}>
             <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: '#212529' }}>{title}</h3>
             <span style={{ fontSize: '0.75rem', color: '#868e96', background: '#f1f3f5', padding: '4px 8px', borderRadius: '4px', fontWeight: 600 }}>Empresa #{user?.idEmpresa}</span>
+          </div>
+
+          {/* Upload de Foto */}
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', background: '#f8f9fa', padding: '16px', borderRadius: '12px' }}>
+            <div style={{ position: 'relative', width: '60px', height: '60px', borderRadius: '50%', background: '#e9ecef', overflow: 'hidden', border: '2px solid #8c2cf5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {formUrlFoto ? (
+                <img src={formUrlFoto} alt="Foto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <Users size={28} style={{ color: '#adb5bd' }} />
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#495057' }}>Foto do Usuário/Motorista</label>
+              <input 
+                type="file" 
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    try {
+                      const base64 = await compressAndConvertBase64(file);
+                      setFormUrlFoto(base64);
+                    } catch (err) {
+                      console.error('Erro ao processar imagem:', err);
+                      alert('Erro ao carregar a imagem.');
+                    }
+                  }
+                }}
+                style={{ fontSize: '0.8rem', color: '#495057' }}
+              />
+              {formUrlFoto && (
+                <button 
+                  type="button"
+                  onClick={() => setFormUrlFoto('')}
+                  style={{ border: 'none', background: 'none', color: '#e63946', fontSize: '0.75rem', padding: 0, textDecoration: 'underline', cursor: 'pointer', textAlign: 'left', fontWeight: 600, width: 'fit-content' }}
+                >
+                  Remover Foto
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Seção 1: Credenciais de Acesso */}
@@ -460,7 +543,18 @@ export default function Usuarios() {
                   return (
                     <tr key={uid} style={{ borderBottom: index === usuarios.length - 1 ? 'none' : '1px solid #f1f3f5', transition: 'background 0.2s', background: index % 2 === 0 ? '#ffffff' : '#fcfdff' }}>
                       <td style={{ padding: '16px 20px', fontWeight: 700, color: '#495057' }}>{u.Codigo}</td>
-                      <td style={{ padding: '16px 20px', fontWeight: 600, color: '#212529' }}>{u.Nome}</td>
+                      <td style={{ padding: '16px 20px', fontWeight: 600, color: '#212529' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e9ecef', overflow: 'hidden', border: '1.5px solid #8c2cf5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {u.UrlFoto || u.urlfoto ? (
+                              <img src={u.UrlFoto || u.urlfoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <Users size={16} style={{ color: '#adb5bd' }} />
+                            )}
+                          </div>
+                          <span>{u.Nome}</span>
+                        </div>
+                      </td>
                       <td style={{ padding: '16px 20px' }}>{renderBadge(tipo)}</td>
                       <td style={{ padding: '16px 20px', color: '#495057' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

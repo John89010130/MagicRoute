@@ -3,6 +3,44 @@ import { useAuth } from '../contexts/AuthContext';
 import { listarVeiculos, adicionarVeiculo, editarVeiculo, excluirVeiculo } from '../services/api';
 import { Truck, Plus, Edit, Trash2, Loader2, Fuel, CreditCard, Image } from 'lucide-react';
 
+const compressAndConvertBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 500;
+        const MAX_HEIGHT = 500;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.75); // compress quality 75%
+        resolve(dataUrl);
+      };
+      img.onerror = (err: any) => reject(err);
+    };
+    reader.onerror = (err: any) => reject(err);
+  });
+};
+
 export default function Veiculos() {
   const { user } = useAuth();
   const [veiculos, setVeiculos] = useState<any[]>([]);
@@ -198,15 +236,47 @@ export default function Veiculos() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>URL da Foto do Veículo</label>
-              <input 
-                type="text" 
-                value={formUrlVeiculo} 
-                onChange={(e) => setFormUrlVeiculo(e.target.value)}
-                placeholder="Ex: https://link-da-imagem.com/foto.jpg"
-                style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', outline: 'none', background: '#ffffff', fontSize: '0.85rem' }}
-              />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Foto do Veículo</label>
+              
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ width: '64px', height: '48px', borderRadius: '6px', background: '#e2e8f0', overflow: 'hidden', border: '1.5px solid #8c2cf5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {formUrlVeiculo ? (
+                    <img src={formUrlVeiculo} alt="Veículo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <Truck size={20} style={{ color: '#94a3b8' }} />
+                  )}
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        try {
+                          const base64 = await compressAndConvertBase64(file);
+                          setFormUrlVeiculo(base64);
+                        } catch (err) {
+                          console.error('Erro ao processar imagem:', err);
+                          alert('Erro ao processar imagem do veículo.');
+                        }
+                      }
+                    }}
+                    style={{ fontSize: '0.75rem', color: '#64748b' }}
+                  />
+                  {formUrlVeiculo && (
+                    <button 
+                      type="button"
+                      onClick={() => setFormUrlVeiculo('')}
+                      style={{ border: 'none', background: 'none', color: '#ef4444', fontSize: '0.75rem', padding: 0, textDecoration: 'underline', cursor: 'pointer', textAlign: 'left', fontWeight: 600, width: 'fit-content' }}
+                    >
+                      Remover Foto
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 

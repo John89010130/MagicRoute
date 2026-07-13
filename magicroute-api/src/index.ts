@@ -793,6 +793,7 @@ app.post('/AdicionarUsuario', async (req, res) => {
   const cnh = sanitize(req.body.CNH || '0');
   const validadeCnh = sanitize(req.body.ValidadeCNH || '0');
   const categoriaCnh = sanitize(req.body.CategoriaCNH || '0');
+  const urlFoto = req.body.UrlFoto ? sanitize(req.body.UrlFoto) : '';
 
   if (!nome || !senha) {
     return res.status(400).json({ sucesso: false, erro: 'Nome e Senha sao obrigatorios.' });
@@ -820,9 +821,9 @@ app.post('/AdicionarUsuario', async (req, res) => {
 
     await pool.request().query(`
       INSERT INTO startapp_magicroute..Usuarios (
-        IDEmpresa, TipoPessoa, Codigo, Nome, Situacao, Senha, CPF, RG, CNH, ValidadeCNH, CategoriaCNH
+        IDEmpresa, TipoPessoa, Codigo, Nome, Situacao, Senha, CPF, RG, CNH, ValidadeCNH, CategoriaCNH, UrlFoto
       ) VALUES (
-        ${idEmpresa}, '${tipoPessoa}', ${codigo}, '${nome}', '${situacao}', '${senha}', '${cpf}', '${rg}', '${cnh}', '${validadeCnh}', '${categoriaCnh}'
+        ${idEmpresa}, '${tipoPessoa}', ${codigo}, '${nome}', '${situacao}', '${senha}', '${cpf}', '${rg}', '${cnh}', '${validadeCnh}', '${categoriaCnh}', '${urlFoto}'
       )
     `);
 
@@ -848,6 +849,7 @@ app.post('/EditarUsuario', async (req, res) => {
   const cnh = sanitize(req.body.CNH || '0');
   const validadeCnh = sanitize(req.body.ValidadeCNH || '0');
   const categoriaCnh = sanitize(req.body.CategoriaCNH || '0');
+  const urlFoto = req.body.UrlFoto ? sanitize(req.body.UrlFoto) : '';
 
   if (isNaN(codigoOriginal) || !tipoPessoaOriginal) {
     return res.status(400).json({ sucesso: false, erro: 'CodigoOriginal e TipoPessoaOriginal sao obrigatorios.' });
@@ -866,6 +868,12 @@ app.post('/EditarUsuario', async (req, res) => {
       }
     }
 
+    // Se urlFoto for fornecido, atualiza. Senão, mantém a antiga.
+    let updatePhotoSql = '';
+    if (req.body.UrlFoto !== undefined) {
+      updatePhotoSql = `, UrlFoto = '${urlFoto}'`;
+    }
+
     await pool.request().query(`
       UPDATE startapp_magicroute..Usuarios 
       SET Codigo = ${novoCodigo},
@@ -878,6 +886,7 @@ app.post('/EditarUsuario', async (req, res) => {
           CNH = '${cnh}',
           ValidadeCNH = '${validadeCnh}',
           CategoriaCNH = '${categoriaCnh}'
+          ${updatePhotoSql}
       WHERE IDEmpresa = ${idEmpresa} AND Codigo = ${codigoOriginal} AND TipoPessoa = '${tipoPessoaOriginal}'
     `);
 
