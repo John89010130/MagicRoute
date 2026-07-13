@@ -2068,7 +2068,10 @@ export default function Entregas() {
         borderBottomRightRadius: '24px',
       }}>
         <button 
-          onClick={() => { window.location.href = '/inicio'; }}
+          onClick={() => {
+            window.location.href = window.location.origin + window.location.pathname + '#/inicio';
+            window.location.reload();
+          }}
           style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
         >
           <ArrowLeft size={24} />
@@ -2416,7 +2419,8 @@ export default function Entregas() {
             <button
               onClick={() => {
                 setShowCelebration(false);
-                window.location.href = '/inicio';
+                window.location.href = window.location.origin + window.location.pathname + '#/inicio';
+                window.location.reload();
               }}
               style={{
                 width: '100%',
