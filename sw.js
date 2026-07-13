@@ -38,6 +38,11 @@ self.addEventListener('activate', (event) => {
 
 // Interceptar requisições (Fetch)
 self.addEventListener('fetch', (event) => {
+  // Pular esquemas que não sejam HTTP ou HTTPS (ex: chrome-extension://)
+  if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
   const reqUrl = new URL(event.request.url);
 
   // Pular requisições de API, Google Maps, localtunnel, ngrok, etc. (Sempre buscar da rede)
