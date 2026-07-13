@@ -155,13 +155,13 @@ export default function Inicio() {
                   onClick={() => handleLoteClick(lote)}
                   style={{
                     background: '#ffffff',
-                    borderRadius: '20px',
-                    padding: '16px',
+                    borderRadius: '16px',
+                    padding: '12px',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
                     border: '1.5px solid #eaeaea',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '16px',
+                    gap: '12px',
                     cursor: 'pointer',
                     transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                   }}
@@ -176,9 +176,9 @@ export default function Inicio() {
                 >
                   {/* Foto do Veículo à Esquerda */}
                   <div style={{
-                    width: '90px',
-                    height: '90px',
-                    borderRadius: '16px',
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '12px',
                     border: '1.5px solid #eaeaea',
                     background: '#f8f9fa',
                     display: 'flex',
@@ -194,41 +194,47 @@ export default function Inicio() {
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     ) : (
-                      <Truck size={36} color="#8c2cf5" />
+                      <Truck size={32} color="#8c2cf5" />
                     )}
                   </div>
 
                   {/* Lote Info à Direita */}
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>
-                      Lote {lote.IDLote}
-                    </h3>
-                    <p style={{ fontSize: '0.8rem', color: '#8c2cf5', fontWeight: 700, margin: 0 }}>
-                      <strong>Data Prevista:</strong> {lote.DataEntrega || 'N/A'}
+                    {/* Linha 1: Lote e Status Pills */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
+                      <h3 style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>
+                        Lote {lote.IDLote}
+                      </h3>
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                        <span style={{ fontSize: '0.7rem', background: '#e2f9f3', color: '#10b981', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>
+                          {entregue}/{total} Feito
+                        </span>
+                        {pendente > 0 && (
+                          <span style={{ fontSize: '0.7rem', background: '#fff3e0', color: '#e67700', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>
+                            {pendente} Pend.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Linha 2: Data e Horários Previstos */}
+                    <p style={{ fontSize: '0.76rem', color: '#64748b', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ color: '#8c2cf5', fontWeight: 700 }}>📅 {lote.DataEntrega || 'N/A'}</span>
+                      {lote.HoraSaidaPrevista && (
+                        <span style={{ color: '#64748b' }}>
+                          • 🕐 {lote.HoraSaidaPrevista} às {lote.HoraRetornoPrevista || '--:--'}
+                        </span>
+                      )}
                     </p>
-                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
-                      <strong>Início Previsto:</strong> {lote.HoraSaidaPrevista || 'N/A'}
+
+                    {/* Linha 3: Veículo e Placa */}
+                    <p style={{ fontSize: '0.76rem', color: '#64748b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      🚚 <strong>{lote.Veiculo || 'Veículo'}</strong> {lote.PlacaEntrega ? `(${lote.PlacaEntrega})` : '(Sem Placa)'}
                     </p>
-                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
-                      <strong>Fim Previsto:</strong> {lote.HoraRetornoPrevista || 'N/A'}
-                    </p>
-                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      <strong>Saída:</strong> {lote.LocalSaida || 'Base Central'}
-                    </p>
-                    <p style={{ fontSize: '0.8rem', color: '#2a9d8f', fontWeight: 600, margin: 0 }}>
-                      <strong>Realizadas:</strong> {entregue} / {total}
-                    </p>
-                    <p style={{ fontSize: '0.8rem', color: '#e67700', fontWeight: 600, margin: 0 }}>
-                      <strong>Pendentes:</strong> {pendente}
-                    </p>
-                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
-                      <strong>Veículo:</strong> {lote.Veiculo || 'VW 3201'}
-                    </p>
-                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
-                      <strong>Placa:</strong> {lote.PlacaEntrega || 'Sem Placa'}
-                    </p>
-                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      <strong>Volta base:</strong> {lote.LocalChegada || lote.LocalSaida || 'Base Central'}
+
+                    {/* Linha 4: Locais de Saída e Chegada */}
+                    <p style={{ fontSize: '0.76rem', color: '#64748b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      📍 {lote.LocalSaida || 'Base'} ➔ 🏁 {lote.LocalChegada || lote.LocalSaida || 'Base'}
                     </p>
                   </div>
 
