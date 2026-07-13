@@ -129,13 +129,12 @@ app.get('/BuscaEntregasData', async (req, res) => {
   const query = `SELECT
     ent.IDLote, ent.LocalSaida, ent.DataEntrega, ent.Veiculo, ent.UrlVeiculo, ent.PlacaEntrega, ent.CodigoMotorista,
     usr.Nome AS NomeMotorista,
-    COUNT(DISTINCT pend.NrNotaFiscal) Pendente, COUNT(DISTINCT Entregue.NrNotaFiscal) Entregue,
-    COUNT(DISTINCT EmTransporte.NrNotaFiscal) EmTransporte
+    SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END) AS Pendente,
+    SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END) AS Entregue,
+    SUM(CASE WHEN ent.StatusEntrega = 'Em Transporte' THEN 1 ELSE 0 END) AS EmTransporte,
+    COUNT(ent.IDEntrega) AS Total
     FROM startapp_magicroute..Entregas ent
     LEFT JOIN startapp_magicroute..Usuarios usr ON usr.IDEmpresa = ent.IDEmpresa AND usr.Codigo = ent.CodigoMotorista AND usr.TipoPessoa IN ('M', 'A/M')
-    LEFT JOIN (SELECT NrNotaFiscal, IDEmpresa, IDLote FROM startapp_magicroute..Entregas WHERE StatusEntrega = 'Pendente') Pend ON pend.IDEmpresa = ent.IDEmpresa AND Pend.IDLote = ent.IDLote
-    LEFT JOIN (SELECT NrNotaFiscal, IDEmpresa, IDLote FROM startapp_magicroute..Entregas WHERE StatusEntrega = 'Entregue') Entregue ON Entregue.IDEmpresa = ent.IDEmpresa AND Entregue.IDLote = ent.IDLote
-    LEFT JOIN (SELECT NrNotaFiscal, IDEmpresa, IDLote FROM startapp_magicroute..Entregas WHERE StatusEntrega = 'Em Transporte') EmTransporte ON EmTransporte.IDEmpresa = ent.IDEmpresa AND EmTransporte.IDLote = ent.IDLote
     ${filterQuery}
     GROUP BY ent.IDLote, ent.LocalSaida, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo, ent.CodigoMotorista, usr.Nome`;
   await execAndRespond(query, res);

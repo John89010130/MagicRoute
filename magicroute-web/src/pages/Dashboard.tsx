@@ -434,7 +434,7 @@ export default function Dashboard() {
                     const pendente = Number(lote.Pendente || 0);
                     const entregue = Number(lote.Entregue || 0);
                     const emTransporte = Number(lote.EmTransporte || 0);
-                    const total = pendente + entregue + emTransporte;
+                    const total = Number(lote.Total || (pendente + entregue + emTransporte));
 
                     let statusTexto = 'A iniciar';
                     let badgeBg = 'rgba(108, 117, 125, 0.1)';

@@ -132,9 +132,8 @@ export default function Inicio() {
                     Local de Saida: [{lote.LocalSaida || 'Não informado'}]
                   </p>
                   
-                  {/* Status do Lote em Roxo (Imagem 2) */}
                   <p style={{ fontSize: '0.85rem', color: '#8c2cf5', fontWeight: 600, margin: 0 }}>
-                    A Entregar: [{lote.Pendente}] Entregues: [{lote.Entregue}]
+                    Entregas: [{lote.Entregue}/{lote.Total || (Number(lote.Pendente) + Number(lote.Entregue) + Number(lote.EmTransporte))}]
                   </p>
                   
                   <p style={{ fontSize: '0.85rem', color: '#6c757d', margin: 0 }}>

@@ -447,7 +447,7 @@ export default function Rotas() {
                   const pendente = Number(rota.Pendente || 0);
                   const entregue = Number(rota.Entregue || 0);
                   const emTransporte = Number(rota.EmTransporte || 0);
-                  const total = pendente + entregue + emTransporte;
+                  const total = Number(rota.Total || (pendente + entregue + emTransporte));
 
                   let statusTexto = 'A iniciar';
                   let badgeBg = '#f1f3f5';

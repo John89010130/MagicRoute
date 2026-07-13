@@ -30,19 +30,11 @@ router.get('/por-data', async (req: Request, res: Response) => {
 
   const query = `SELECT
     ent.IDLote, ent.LocalSaida, ent.DataEntrega, ent.Veiculo, ent.UrlVeiculo, ent.PlacaEntrega,
-    COUNT(DISTINCT pend.NrNotaFiscal) AS Pendente,
-    COUNT(DISTINCT Entregue.NrNotaFiscal) AS Entregue,
-    COUNT(DISTINCT EmTransporte.NrNotaFiscal) AS EmTransporte
+    SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END) AS Pendente,
+    SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END) AS Entregue,
+    SUM(CASE WHEN ent.StatusEntrega = 'Em Transporte' THEN 1 ELSE 0 END) AS EmTransporte,
+    COUNT(ent.IDEntrega) AS Total
     FROM startapp_magicroute..Entregas ent
-    LEFT JOIN (
-      SELECT NrNotaFiscal, IDEmpresa, IDLote FROM startapp_magicroute..Entregas WHERE StatusEntrega = 'Pendente'
-    ) Pend ON pend.IDEmpresa = ent.IDEmpresa AND Pend.IDLote = ent.IDLote
-    LEFT JOIN (
-      SELECT NrNotaFiscal, IDEmpresa, IDLote FROM startapp_magicroute..Entregas WHERE StatusEntrega = 'Entregue'
-    ) Entregue ON Entregue.IDEmpresa = ent.IDEmpresa AND Entregue.IDLote = ent.IDLote
-    LEFT JOIN (
-      SELECT NrNotaFiscal, IDEmpresa, IDLote FROM startapp_magicroute..Entregas WHERE StatusEntrega = 'Em Transporte'
-    ) EmTransporte ON EmTransporte.IDEmpresa = ent.IDEmpresa AND EmTransporte.IDLote = ent.IDLote
     WHERE ent.IDEmpresa = ${idEmpresa} AND ent.CodigoMotorista = ${codigoMotorista}
       AND CAST(ent.DataEntrega AS DATE) BETWEEN '${dataInicial}' AND '${dataFinal}'
     GROUP BY ent.IDLote, ent.LocalSaida, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo`;
