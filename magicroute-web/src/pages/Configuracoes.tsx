@@ -8,6 +8,7 @@ export default function Configuracoes() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tempoAtendimento, setTempoAtendimento] = useState('');
+  const [permiteRoteirizar, setPermiteRoteirizar] = useState(false);
   const [sucesso, setSucesso] = useState('');
 
   useEffect(() => {
@@ -17,6 +18,9 @@ export default function Configuracoes() {
         const config = await buscarConfiguracoes(user.idEmpresa);
         if (config && config.TempoAtendimentoPadrao !== undefined) {
           setTempoAtendimento(config.TempoAtendimentoPadrao.toString());
+        }
+        if (config && config.PermiteMotoristaRoteirizar !== undefined) {
+          setPermiteRoteirizar(!!config.PermiteMotoristaRoteirizar);
         }
       } catch (err) {
         console.error('Erro ao buscar configurações', err);
@@ -33,8 +37,8 @@ export default function Configuracoes() {
     setSaving(true);
     setSucesso('');
     try {
-      await salvarConfiguracoes(user.idEmpresa, tempoAtendimento);
-      setSucesso('Configurações atualizadas com sucesso!');
+      await salvarConfiguracoes(user.idEmpresa, tempoAtendimento, permiteRoteirizar);
+      setSucesso('Configurações updated successfully!');
       setTimeout(() => setSucesso(''), 3000);
     } catch (err: any) {
       alert('Erro ao salvar: ' + err.message);
@@ -97,6 +101,21 @@ export default function Configuracoes() {
                 Você pode substituir esse valor individualmente dentro de cada Lote na tela de Entregas.
               </p>
             </div>
+          </div>
+
+          <div style={{ marginBottom: '24px', borderTop: '1px solid #f1f3f5', paddingTop: '20px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', fontWeight: 600, color: '#495057', cursor: 'pointer' }}>
+              <input 
+                type="checkbox" 
+                checked={permiteRoteirizar}
+                onChange={(e) => setPermiteRoteirizar(e.target.checked)}
+                style={{ width: '18px', height: '18px', accentColor: '#8c2cf5', cursor: 'pointer' }}
+              />
+              Habilitar Roteirização para Motoristas
+            </label>
+            <p style={{ fontSize: '0.8rem', color: '#6c757d', margin: '4px 0 0 28px', lineHeight: 1.4 }}>
+              Se ativado, os motoristas terão a permissão de recalcular e reordenar a sequência de paradas das suas rotas diretamente pelo aplicativo móvel.
+            </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>

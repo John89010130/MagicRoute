@@ -161,10 +161,14 @@ export async function buscarConfiguracoes(idEmpresa: string) {
   });
 }
 
-export async function salvarConfiguracoes(idEmpresa: string, tempoAtendimentoPadrao: string) {
+export async function salvarConfiguracoes(idEmpresa: string, tempoAtendimentoPadrao: string, permiteMotoristaRoteirizar?: boolean) {
   return apiRequest('/api/configuracoes/empresa', {
     method: 'PATCH',
-    body: { IDEmpresa: idEmpresa, TempoAtendimentoPadrao: tempoAtendimentoPadrao },
+    body: { 
+      IDEmpresa: idEmpresa, 
+      TempoAtendimentoPadrao: tempoAtendimentoPadrao, 
+      PermiteMotoristaRoteirizar: permiteMotoristaRoteirizar 
+    },
   });
 }
 
@@ -370,4 +374,18 @@ export async function gravarPontoGPS(
 
 export async function buscarPontosGPS(idLote: string) {
   return apiRequest(`/api/gps/gps-points/${idLote}`);
+}
+
+export async function finalizarLote(idEmpresa: string, idLote: string, usuarioNome: string) {
+  return apiRequest('/api/entregas/finalizar-lote', {
+    method: 'PATCH',
+    body: { IDEmpresa: idEmpresa, IDLote: idLote, UsuarioNome: usuarioNome }
+  });
+}
+
+export async function reabrirLote(idEmpresa: string, idLote: string, usuarioNome: string) {
+  return apiRequest('/api/entregas/reabrir-lote', {
+    method: 'PATCH',
+    body: { IDEmpresa: idEmpresa, IDLote: idLote, UsuarioNome: usuarioNome }
+  });
 }

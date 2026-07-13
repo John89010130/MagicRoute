@@ -669,41 +669,53 @@ export default function Mapa() {
   if (isMotorista) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
-        <div style={{
-          background: '#8c2cf5',
-          padding: '20px 16px',
-          color: '#ffffff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          boxShadow: '0 4px 10px rgba(140, 44, 245, 0.15)',
-          borderBottomLeftRadius: '24px',
-          borderBottomRightRadius: '24px',
-          zIndex: 10
-        }}>
-          <button onClick={() => navigate(`/entregas?idLote=${idLote}`)} style={{ background: 'rgba(255, 255, 255, 0.2)', border: 'none', borderRadius: '12px', padding: '10px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ArrowLeft size={20} />
-          </button>
-          <div style={{ textAlign: 'center' }}>
-            <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, letterSpacing: '0.5px' }}>Trajeto Realizado</h1>
-            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', opacity: 0.9 }}>Lote #{idLote}</p>
-          </div>
-          <button 
-            onClick={() => setShowRealPath(!showRealPath)}
-            style={{ 
-              background: showRealPath ? '#2a9d8f' : 'rgba(255, 255, 255, 0.2)', 
-              border: 'none', 
-              borderRadius: '12px', 
-              padding: '8px 12px', 
-              color: '#fff', 
-              fontSize: '0.75rem', 
-              fontWeight: 700, 
-              cursor: 'pointer' 
-            }}
-          >
-            {showRealPath ? 'Ver GPS' : 'Original'}
-          </button>
-        </div>
+        {/* Botão flutuante de Voltar no topo esquerdo */}
+        <button 
+          onClick={() => navigate(`/entregas?idLote=${idLote}`)} 
+          style={{ 
+            position: 'absolute',
+            top: '16px',
+            left: '16px',
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            borderRadius: '50%', 
+            width: '44px',
+            height: '44px',
+            color: '#0f172a', 
+            cursor: 'pointer', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            zIndex: 10
+          }}
+        >
+          <ArrowLeft size={20} />
+        </button>
+
+        {/* Botão flutuante para toggle GPS no topo direito */}
+        <button 
+          onClick={() => setShowRealPath(!showRealPath)}
+          style={{ 
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: showRealPath ? '#2a9d8f' : 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(8px)',
+            border: showRealPath ? 'none' : '1px solid rgba(226, 232, 240, 0.8)', 
+            borderRadius: '20px', 
+            padding: '10px 16px', 
+            color: showRealPath ? '#fff' : '#0f172a', 
+            fontSize: '0.75rem', 
+            fontWeight: 700, 
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            zIndex: 10
+          }}
+        >
+          {showRealPath ? 'Ver GPS' : 'Original'}
+        </button>
         
         <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
           {renderGoogleMap('100%')}

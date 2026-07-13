@@ -14,7 +14,7 @@ router.get('/empresa/:idEmpresa', async (req: Request, res: Response) => {
 
   try {
     const empresas = await executeQuery(`
-      SELECT IDEmpresa, TempoAtendimentoPadrao 
+      SELECT IDEmpresa, TempoAtendimentoPadrao, ISNULL(PermiteMotoristaRoteirizar, 0) AS PermiteMotoristaRoteirizar
       FROM startapp_magicroute..Empresas 
       WHERE IDEmpresa = ${Number(idEmpresa)}
     `);
@@ -34,13 +34,16 @@ router.get('/empresa/:idEmpresa', async (req: Request, res: Response) => {
  * Atualiza configurações globais da empresa
  */
 router.patch('/empresa', async (req: Request, res: Response) => {
-  const { IDEmpresa, TempoAtendimentoPadrao } = req.body;
+  const { IDEmpresa, TempoAtendimentoPadrao, PermiteMotoristaRoteirizar } = req.body;
   if (!IDEmpresa) return res.status(400).json({ sucesso: false, mensagem: 'ID da Empresa não informado.' });
 
   try {
     let updates = [];
     if (TempoAtendimentoPadrao !== undefined) {
       updates.push(`TempoAtendimentoPadrao = ${Number(TempoAtendimentoPadrao)}`);
+    }
+    if (PermiteMotoristaRoteirizar !== undefined) {
+      updates.push(`PermiteMotoristaRoteirizar = ${PermiteMotoristaRoteirizar ? 1 : 0}`);
     }
 
     if (updates.length > 0) {

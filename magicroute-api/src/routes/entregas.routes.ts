@@ -29,15 +29,17 @@ router.get('/por-data', async (req: Request, res: Response) => {
   if (!dataFinal) dataFinal = dataInicial;
 
   const query = `SELECT
-    ent.IDLote, ent.LocalSaida, ent.DataEntrega, ent.Veiculo, ent.UrlVeiculo, ent.PlacaEntrega,
+    ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.UrlVeiculo, ent.PlacaEntrega,
     SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END) AS Pendente,
     SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END) AS Entregue,
     SUM(CASE WHEN ent.StatusEntrega = 'Em Transporte' THEN 1 ELSE 0 END) AS EmTransporte,
-    COUNT(ent.IDEntrega) AS Total
+    COUNT(ent.IDEntrega) AS Total,
+    ISNULL(lot.Situacao, 'Em Aberto') AS SituacaoLote
     FROM startapp_magicroute..Entregas ent
+    LEFT JOIN startapp_magicroute..Lotes lot ON lot.IDEmpresa = ent.IDEmpresa AND lot.IDLote = ent.IDLote
     WHERE ent.IDEmpresa = ${idEmpresa} AND ent.CodigoMotorista = ${codigoMotorista}
       AND CAST(ent.DataEntrega AS DATE) BETWEEN '${dataInicial}' AND '${dataFinal}'
-    GROUP BY ent.IDLote, ent.LocalSaida, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo`;
+    GROUP BY ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo, lot.Situacao`;
 
   await execAndRespond(query, res);
 });
@@ -767,6 +769,72 @@ router.post('/importar-lote', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Erro ao importar entregas em lote:', err);
     res.status(500).json({ sucesso: false, erro: err.message });
+  }
+});
+
+/**
+ * PATCH /api/entregas/finalizar-lote
+ * Dar baixa / finalizar um lote de entrega
+ */
+router.patch('/finalizar-lote', async (req: Request, res: Response) => {
+  const { IDEmpresa, IDLote, UsuarioNome } = req.body;
+  if (!IDEmpresa || !IDLote) return res.status(400).json({ sucesso: false, mensagem: 'Faltam parâmetros obrigatórios.' });
+
+  try {
+    await executeQuery(`
+      UPDATE startapp_magicroute..Lotes 
+      SET Situacao = 'Concluido'
+      WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}
+    `);
+
+    try {
+      await registrarLogInterno({
+        idEmpresa: Number(IDEmpresa),
+        idLote: Number(IDLote),
+        usuario: sanitize(UsuarioNome || 'Admin'),
+        tipoAcao: 'ALTERACAO_ADM',
+        descricao: `Deu baixa / finalizou o Lote #${IDLote}.`
+      });
+    } catch (logErr) {
+      console.error('Erro ao registrar log:', logErr);
+    }
+
+    res.json({ sucesso: true, mensagem: 'Lote finalizado com sucesso.' });
+  } catch (err: any) {
+    res.status(500).json({ sucesso: false, mensagem: err.message });
+  }
+});
+
+/**
+ * PATCH /api/entregas/reabrir-lote
+ * Reabre um lote finalizado
+ */
+router.patch('/reabrir-lote', async (req: Request, res: Response) => {
+  const { IDEmpresa, IDLote, UsuarioNome } = req.body;
+  if (!IDEmpresa || !IDLote) return res.status(400).json({ sucesso: false, mensagem: 'Faltam parâmetros obrigatórios.' });
+
+  try {
+    await executeQuery(`
+      UPDATE startapp_magicroute..Lotes 
+      SET Situacao = 'Em Aberto'
+      WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}
+    `);
+
+    try {
+      await registrarLogInterno({
+        idEmpresa: Number(IDEmpresa),
+        idLote: Number(IDLote),
+        usuario: sanitize(UsuarioNome || 'Admin'),
+        tipoAcao: 'ALTERACAO_ADM',
+        descricao: `Reabriu o Lote #${IDLote}.`
+      });
+    } catch (logErr) {
+      console.error('Erro ao registrar log:', logErr);
+    }
+
+    res.json({ sucesso: true, mensagem: 'Lote reaberto com sucesso.' });
+  } catch (err: any) {
+    res.status(500).json({ sucesso: false, mensagem: err.message });
   }
 });
 

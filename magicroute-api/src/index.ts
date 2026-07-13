@@ -127,16 +127,18 @@ app.get('/BuscaEntregasData', async (req, res) => {
   }
 
   const query = `SELECT
-    ent.IDLote, ent.LocalSaida, ent.DataEntrega, ent.Veiculo, ent.UrlVeiculo, ent.PlacaEntrega, ent.CodigoMotorista,
+    ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.UrlVeiculo, ent.PlacaEntrega, ent.CodigoMotorista,
     usr.Nome AS NomeMotorista,
     SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END) AS Pendente,
     SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END) AS Entregue,
     SUM(CASE WHEN ent.StatusEntrega = 'Em Transporte' THEN 1 ELSE 0 END) AS EmTransporte,
-    COUNT(ent.IDEntrega) AS Total
+    COUNT(ent.IDEntrega) AS Total,
+    ISNULL(lot.Situacao, 'Em Aberto') AS SituacaoLote
     FROM startapp_magicroute..Entregas ent
+    LEFT JOIN startapp_magicroute..Lotes lot ON lot.IDEmpresa = ent.IDEmpresa AND lot.IDLote = ent.IDLote
     LEFT JOIN startapp_magicroute..Usuarios usr ON usr.IDEmpresa = ent.IDEmpresa AND usr.Codigo = ent.CodigoMotorista AND usr.TipoPessoa IN ('M', 'A/M')
     ${filterQuery}
-    GROUP BY ent.IDLote, ent.LocalSaida, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo, ent.CodigoMotorista, usr.Nome`;
+    GROUP BY ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo, ent.CodigoMotorista, usr.Nome, lot.Situacao`;
   await execAndRespond(query, res);
 });
 
@@ -156,7 +158,11 @@ app.get('/BuscaEntregasIDLote', async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request().query(
-      `SELECT * FROM startapp_magicroute..Entregas ent ${filterQuery} ORDER BY ent.SequenciaRoteirizada, ent.SequenciaOriginal ASC`
+      `SELECT ent.*, ISNULL(lot.Situacao, 'Em Aberto') AS SituacaoLote 
+       FROM startapp_magicroute..Entregas ent 
+       LEFT JOIN startapp_magicroute..Lotes lot ON lot.IDEmpresa = ent.IDEmpresa AND lot.IDLote = ent.IDLote
+       ${filterQuery} 
+       ORDER BY ent.SequenciaRoteirizada, ent.SequenciaOriginal ASC`
     );
     
     const entregas = result.recordset || [];
@@ -1133,7 +1139,25 @@ app.post('/ExcluirVeiculo', async (req, res) => {
 // ==========================================
 async function startServer() {
   try {
-    await getPool();
+    const pool = await getPool();
+    
+    // Migração de banco: adicionar coluna PermiteMotoristaRoteirizar se não existir
+    try {
+      await pool.request().query(`
+        IF NOT EXISTS (
+            SELECT * FROM sys.columns 
+            WHERE object_id = OBJECT_ID('startapp_magicroute..Empresas') 
+              AND name = 'PermiteMotoristaRoteirizar'
+        )
+        BEGIN
+            ALTER TABLE startapp_magicroute..Empresas ADD PermiteMotoristaRoteirizar BIT NOT NULL DEFAULT 0;
+        END
+      `);
+      console.log('✅ Migração de banco: Coluna PermiteMotoristaRoteirizar verificada/criada.');
+    } catch (migErr) {
+      console.error('⚠️ Falha ao verificar/adicionar coluna PermiteMotoristaRoteirizar:', migErr);
+    }
+
     app.listen(PORT, () => {
       console.log(`🚀 MagicRoute API rodando em http://localhost:${PORT}`);
       console.log(`📖 Endpoints novos: /api/auth, /api/entregas, /api/dashboard`);

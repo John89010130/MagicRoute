@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote } from '../services/api';
+import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote, buscarConfiguracoes, finalizarLote, reabrirLote } from '../services/api';
 import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload } from 'lucide-react';
 
 export default function Entregas() {
@@ -12,6 +12,8 @@ export default function Entregas() {
   const idLote = searchParams.get('idLote') || '';
 
   const [entregas, setEntregas] = useState<any[]>([]);
+  const [permiteRoteirizar, setPermiteRoteirizar] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   const [loading, setLoading] = useState(true);
   const [roteirizando, setRoteirizando] = useState(false);
   const [isRouteForced, setIsRouteForced] = useState(false);
@@ -849,6 +851,27 @@ export default function Entregas() {
     }
   }, [idLote, user, activeTab]);
 
+  useEffect(() => {
+    const fetchConfig = async () => {
+      if (!user) return;
+      try {
+        const config = await buscarConfiguracoes(user.idEmpresa);
+        setPermiteRoteirizar(!!config?.PermiteMotoristaRoteirizar);
+      } catch (err) {
+        console.error('Erro ao buscar configurações da empresa:', err);
+      }
+    };
+    fetchConfig();
+  }, [user]);
+
+  useEffect(() => {
+    const finishedLote = localStorage.getItem('lote_recem_finalizado');
+    if (finishedLote && String(finishedLote) === String(idLote)) {
+      setShowCelebration(true);
+      localStorage.removeItem('lote_recem_finalizado');
+    }
+  }, [idLote]);
+
   const handleHoraSaidaBlur = async (e: any) => {
     if (!user || !idLote) return;
     try {
@@ -959,8 +982,19 @@ export default function Entregas() {
     window.dispatchEvent(new CustomEvent('parar-gps'));
 
     try {
+      // Verificar se esta é a última entrega pendente
+      const pendentes = entregas.filter(e => {
+        const s = (e.StatusEntrega || e.SITUACAOENTREGA || '').toLowerCase();
+        return !s.includes('entregue') && !s.includes('concluido') && !s.includes('finalizada');
+      });
+
       await gravarEvento(user.codigo, user.codigo, 'FimEntrega', chave);
-      await fetchEntregas();
+      
+      if (pendentes.length === 1 && String(pendentes[0].NumeroPedido) === String(entrega.NumeroPedido)) {
+        localStorage.setItem('lote_recem_finalizado', idLote);
+      }
+      
+      window.location.reload();
     } catch (err) {
       console.error('Erro ao finalizar entrega:', err);
     }
@@ -975,9 +1009,31 @@ export default function Entregas() {
 
     try {
       await gravarEvento(user.codigo, user.codigo, 'LimpaInicioFinalEntrega', chave);
-      await fetchEntregas();
+      window.location.reload();
     } catch (err) {
       console.error('Erro ao reabrir entrega:', err);
+    }
+  };
+
+  const handleFinalizarLote = async () => {
+    if (!user || !idLote) return;
+    if (!window.confirm('Deseja realmente dar baixa / finalizar este lote de entrega?')) return;
+    try {
+      await finalizarLote(user.idEmpresa, idLote, user.nomeUsuario);
+      fetchEntregas();
+    } catch (err: any) {
+      alert('Erro ao finalizar lote: ' + err.message);
+    }
+  };
+
+  const handleReabrirLote = async () => {
+    if (!user || !idLote) return;
+    if (!window.confirm('Deseja realmente reabrir este lote de entrega?')) return;
+    try {
+      await reabrirLote(user.idEmpresa, idLote, user.nomeUsuario);
+      fetchEntregas();
+    } catch (err: any) {
+      alert('Erro ao reabrir lote: ' + err.message);
     }
   };
 
@@ -1043,6 +1099,7 @@ export default function Entregas() {
   };
 
   const isAdm = user?.tipoPessoaAtivo === 'Administrador';
+  const loteSituacao = entregas.length > 0 ? (entregas[0].SituacaoLote || 'Em Aberto') : 'Em Aberto';
 
   const formatCPF_CNPJ = (val: string) => {
     let v = val.replace(/\D/g, "");
@@ -1678,6 +1735,22 @@ export default function Entregas() {
             >
               <Plus size={16} /> Adicionar Entrega
             </button>
+
+            {loteSituacao === 'Concluido' ? (
+              <button 
+                onClick={handleReabrirLote}
+                style={{ background: '#ffc107', color: '#212529', border: 'none', borderRadius: '8px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
+              >
+                <RotateCcw size={16} /> Reabrir Lote
+              </button>
+            ) : (
+              <button 
+                onClick={handleFinalizarLote}
+                style={{ background: '#28a745', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', boxShadow: '0 2px 8px rgba(40, 167, 69, 0.2)' }}
+              >
+                <CheckCircle2 size={16} /> Dar Baixa no Lote
+              </button>
+            )}
           </div>
         </div>
 
@@ -2217,48 +2290,168 @@ export default function Entregas() {
       </div>
 
       {/* Botão "Roteirizar" Grande e Roxo Fixo na Parte Inferior (Imagem 3) */}
-      <div style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: '#f8f9fe',
-        padding: '12px 16px',
-        borderTop: '1px solid #eaeaea',
-      }}>
-        <button
-          onClick={handleRoteirizar}
-          disabled={roteirizando}
-          style={{
-            background: '#8c2cf5',
-            color: '#ffffff',
-            border: 'none',
-            width: '100%',
-            padding: '16px',
-            borderRadius: '16px',
-            fontSize: '1rem',
-            fontWeight: 700,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(140, 44, 245, 0.3)',
-          }}
-        >
-          {roteirizando ? (
-            <>
-              <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-              Processando Rota...
-            </>
-          ) : (
-            <>
-              <Navigation size={18} style={{ transform: 'rotate(45deg)' }} />
-              Roteirizar
-            </>
-          )}
-        </button>
-      </div>
+      {(isAdm || permiteRoteirizar) && (
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: '#f8f9fe',
+          padding: '12px 16px',
+          borderTop: '1px solid #eaeaea',
+          zIndex: 5
+        }}>
+          <button
+            onClick={handleRoteirizar}
+            disabled={roteirizando}
+            style={{
+              background: '#8c2cf5',
+              color: '#ffffff',
+              border: 'none',
+              width: '100%',
+              padding: '16px',
+              borderRadius: '16px',
+              fontSize: '1rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(140, 44, 245, 0.3)',
+            }}
+          >
+            {roteirizando ? (
+              <>
+                <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                Processando Rota...
+              </>
+            ) : (
+              <>
+                <Navigation size={18} style={{ transform: 'rotate(45deg)' }} />
+                Roteirizar
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Pop-up de Celebração com Efeito de Confetes */}
+      {showCelebration && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          fontFamily: 'sans-serif',
+          backdropFilter: 'blur(8px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '24px',
+            width: '90%',
+            maxWidth: '400px',
+            padding: '36px 24px',
+            textAlign: 'center',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+            animation: 'scaleUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            {/* Confetes animados em CSS */}
+            <div className="confetti-container" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+              {[...Array(25)].map((_, i) => {
+                const colors = ['#8c2cf5', '#10b981', '#3b82f6', '#f59e0b', '#ec4899'];
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                const randomLeft = Math.random() * 100;
+                const randomDelay = Math.random() * 2;
+                const randomRotation = Math.random() * 360;
+                const randomScale = 0.5 + Math.random() * 0.8;
+                return (
+                  <div 
+                    key={i} 
+                    style={{
+                      position: 'absolute',
+                      width: '10px',
+                      height: '10px',
+                      background: randomColor,
+                      borderRadius: Math.random() > 0.5 ? '50%' : '2px',
+                      left: `${randomLeft}%`,
+                      top: '-20px',
+                      transform: `rotate(${randomRotation}deg) scale(${randomScale})`,
+                      opacity: 0.8,
+                      animation: `fall 2.5s infinite linear`,
+                      animationDelay: `${randomDelay}s`
+                    }}
+                  />
+                );
+              })}
+            </div>
+
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: 'rgba(16, 185, 129, 0.1)',
+              color: '#10b981',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 24px auto',
+            }}>
+              <CheckCircle2 size={48} />
+            </div>
+
+            <h2 style={{ margin: '0 0 12px 0', fontSize: '1.5rem', fontWeight: 800, color: '#1e293b' }}>
+              Parabéns!
+            </h2>
+            <p style={{ margin: '0 0 28px 0', fontSize: '0.95rem', color: '#64748b', lineHeight: 1.5 }}>
+              Todas as entregas do lote foram concluídas com sucesso!
+            </p>
+
+            <button
+              onClick={() => {
+                setShowCelebration(false);
+                navigate('/inicio');
+              }}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, #8c2cf5 0%, #6e1ac9 100%)',
+                color: '#ffffff',
+                border: 'none',
+                padding: '14px',
+                borderRadius: '12px',
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(140, 44, 245, 0.3)',
+                transition: 'transform 0.2s'
+              }}
+            >
+              Voltar para Minhas Entregas
+            </button>
+          </div>
+
+          <style>{`
+            @keyframes fadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes scaleUp {
+              from { transform: scale(0.85); opacity: 0; }
+              to { transform: scale(1); opacity: 1; }
+            }
+            @keyframes fall {
+              0% { top: -20px; transform: translateY(0) rotate(0deg); }
+              100% { top: 100%; transform: translateY(300px) rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      )}
     </div>
   );
 }
