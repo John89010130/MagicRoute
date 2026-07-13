@@ -132,7 +132,7 @@ app.get('/BuscaEntregasData', async (req, res) => {
     SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END) AS Pendente,
     SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END) AS Entregue,
     SUM(CASE WHEN ent.StatusEntrega = 'Em Transporte' THEN 1 ELSE 0 END) AS EmTransporte,
-    COUNT(ent.IDEntrega) AS Total,
+    COUNT(ent.NumeroPedido) AS Total,
     ISNULL(lot.Situacao, 'Em Aberto') AS SituacaoLote
     FROM startapp_magicroute..Entregas ent
     LEFT JOIN startapp_magicroute..Lotes lot ON lot.IDEmpresa = ent.IDEmpresa AND lot.IDLote = ent.IDLote
