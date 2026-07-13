@@ -316,7 +316,7 @@ export default function Entregas() {
       if (res && res.sucesso) {
         setShowImportModal(false);
         alert(res.mensagem || 'Importação realizada com sucesso!');
-        fetchEntregas();
+        window.location.reload();
       } else {
         alert('Erro ao importar: ' + (res.erro || 'Desconhecido'));
       }
