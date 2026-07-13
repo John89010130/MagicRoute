@@ -4,6 +4,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   params?: Record<string, string | number | undefined>;
   body?: Record<string, any>;
+  json?: boolean;
 }
 
 // Limpar URLs legadas antigas (Ngrok/Localtunnel) salvas no LocalStorage dos clientes
@@ -50,7 +51,7 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
   };
 
   if (body) {
-    if (method === 'POST') {
+    if (method === 'POST' && !options.json) {
       // Simular form-urlencoded (como o Flutter fazia)
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
       fetchOptions.body = new URLSearchParams(
@@ -239,7 +240,7 @@ export async function adicionarEntrega(body: any) {
 }
 
 export async function importarEntregasLote(body: { IdEmpresa: string; IDLote: string; Entregas: any[]; UsuarioNome: string }) {
-  return apiRequest('/api/entregas/importar-lote', { method: 'POST', body });
+  return apiRequest('/api/entregas/importar-lote', { method: 'POST', body, json: true });
 }
 
 export async function editarEntrega(body: any) {
