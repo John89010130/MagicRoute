@@ -237,7 +237,7 @@ export default function Rotas() {
         <div style={{ background: '#ffffff', borderRadius: '12px', padding: '20px', border: '1.5px solid #eaeaea', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#adb5bd', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Total de Rotas</p>
-            <h3 style={{ fontSize: '2rem', fontWeight: 700, color: '#333', margin: 0 }}>{rotas.length || 2}</h3>
+            <h3 style={{ fontSize: '2rem', fontWeight: 700, color: '#333', margin: 0 }}>{rotas.length}</h3>
           </div>
           <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#f3f0ff', color: '#8c2cf5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RouteIcon size={20} />
@@ -248,7 +248,12 @@ export default function Rotas() {
         <div style={{ background: '#ffffff', borderRadius: '12px', padding: '20px', border: '1.5px solid #eaeaea', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#adb5bd', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Rotas Ativas</p>
-            <h3 style={{ fontSize: '2rem', fontWeight: 700, color: '#333', margin: 0 }}>{rotas.filter(r => r.Pendente > 0).length || 2}</h3>
+            <h3 style={{ fontSize: '2rem', fontWeight: 700, color: '#333', margin: 0 }}>
+              {rotas.filter(r => {
+                const sit = (r.SituacaoLote || r.Situacao || '').toLowerCase();
+                return sit !== 'concluido' && sit !== 'concluído' && sit !== 'entregue';
+              }).length}
+            </h3>
           </div>
           <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#e7f5ff', color: '#228be6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RouteIcon size={20} />
@@ -259,7 +264,12 @@ export default function Rotas() {
         <div style={{ background: '#ffffff', borderRadius: '12px', padding: '20px', border: '1.5px solid #eaeaea', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#adb5bd', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Rotas Concluidas</p>
-            <h3 style={{ fontSize: '2rem', fontWeight: 700, color: '#333', margin: 0 }}>0</h3>
+            <h3 style={{ fontSize: '2rem', fontWeight: 700, color: '#333', margin: 0 }}>
+              {rotas.filter(r => {
+                const sit = (r.SituacaoLote || r.Situacao || '').toLowerCase();
+                return sit === 'concluido' || sit === 'concluído' || sit === 'entregue';
+              }).length}
+            </h3>
           </div>
           <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#e3fafc', color: '#0c8599', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RouteIcon size={20} />
@@ -270,7 +280,9 @@ export default function Rotas() {
         <div style={{ background: '#ffffff', borderRadius: '12px', padding: '20px', border: '1.5px solid #eaeaea', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#adb5bd', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Rotas em Andamento</p>
-            <h3 style={{ fontSize: '2rem', fontWeight: 700, color: '#333', margin: 0 }}>0</h3>
+            <h3 style={{ fontSize: '2rem', fontWeight: 700, color: '#333', margin: 0 }}>
+              {rotas.filter(r => Number(r.EmTransporte || 0) > 0).length}
+            </h3>
           </div>
           <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#f3f0ff', color: '#8c2cf5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RouteIcon size={20} />
