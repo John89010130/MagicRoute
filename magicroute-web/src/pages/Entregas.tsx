@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote } from '../services/api';
@@ -91,7 +92,7 @@ export default function Entregas() {
       'São Paulo',
       '01310-100',
       'SP',
-      '150.50',
+      150.50,
       'Pix',
       '15/07/2026',
       '',
@@ -111,11 +112,11 @@ export default function Entregas() {
       '',
       '',
       '',
-      '0.00',
+      0.00,
       'A Faturar',
       '15/07/2026',
-      '-23.5612',
-      '-46.6553',
+      -23.5612,
+      -46.6553,
       'Entregar para o porteiro',
       '',
       '',
@@ -123,14 +124,120 @@ export default function Entregas() {
       ''
     ];
     
-    const csvContent = '\uFEFF' + [headers.join(';'), row1.join(';'), row2.join(';'), ''].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', `modelo_importacao_lote_${idLote}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, row1, row2]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Entregas');
+    XLSX.writeFile(workbook, `modelo_importacao_lote_${idLote}.xlsx`);
+  };
+
+  const processParsedRows = (headers: string[], dataRows: string[][]) => {
+    const parsedItems: any[] = [];
+    const errors: string[] = [];
+    
+    const colIndex = (name: string) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+    
+    const idxPedido = colIndex('NumeroPedido');
+    const idxNota = colIndex('NrNotaFiscal');
+    const idxCliente = colIndex('NomeCliente');
+    const idxEndereco = colIndex('EnderecoEntrega');
+    const idxBairro = colIndex('Bairro');
+    const idxCidade = colIndex('Cidade');
+    const idxCep = colIndex('CEP');
+    const idxUf = colIndex('UFEntrega');
+    const idxValor = colIndex('ValorRecebido');
+    const idxPagamento = colIndex('TipoPagamento');
+    const idxData = colIndex('DataEntrega');
+    const idxLat = colIndex('LatitudeEntrega');
+    const idxLng = colIndex('LongitudeEntrega');
+    const idxObs = colIndex('Observacoes');
+    const idxHInicio1 = colIndex('HoraRecebimentoInicio1');
+    const idxHFim1 = colIndex('HoraRecebimentoFim1');
+    const idxHInicio2 = colIndex('HoraRecebimentoInicio2');
+    const idxHFim2 = colIndex('HoraRecebimentoFim2');
+    
+    if (idxPedido === -1 || idxNota === -1 || idxCliente === -1) {
+      setImportErrors(['Cabeçalhos obrigatórios ausentes. Certifique-se de que a planilha possui as colunas: NumeroPedido, NrNotaFiscal, NomeCliente.']);
+      return;
+    }
+    
+    for (let i = 0; i < dataRows.length; i++) {
+      const rowCells = dataRows[i];
+      if (rowCells.every(c => !c.trim())) continue;
+      
+      const getValue = (idx: number) => (idx !== -1 && rowCells[idx] !== undefined) ? rowCells[idx] : '';
+      
+      const numLinha = i + 2;
+      const pedido = getValue(idxPedido).trim();
+      const nota = getValue(idxNota).trim();
+      const cliente = getValue(idxCliente).trim();
+      const endereco = getValue(idxEndereco).trim();
+      const bairro = getValue(idxBairro).trim();
+      const cidade = getValue(idxCidade).trim();
+      const cep = getValue(idxCep).trim();
+      const uf = getValue(idxUf).trim() || 'SP';
+      const valorStr = getValue(idxValor).trim() || '0';
+      const pagamento = getValue(idxPagamento).trim() || 'A Faturar';
+      const dataStr = getValue(idxData).trim();
+      const latStr = getValue(idxLat).trim();
+      const lngStr = getValue(idxLng).trim();
+      const obs = getValue(idxObs).trim();
+      const hInicio1 = getValue(idxHInicio1).trim();
+      const hFim1 = getValue(idxHFim1).trim();
+      const hInicio2 = getValue(idxHInicio2).trim();
+      const hFim2 = getValue(idxHFim2).trim();
+      
+      if (!pedido) {
+        errors.push(`Linha ${numLinha}: Coluna 'NumeroPedido' está vazia.`);
+        continue;
+      }
+      if (!nota) {
+        errors.push(`Linha ${numLinha}: Coluna 'NrNotaFiscal' está vazia.`);
+        continue;
+      }
+      if (!cliente) {
+        errors.push(`Linha ${numLinha}: Coluna 'NomeCliente' está vazia.`);
+        continue;
+      }
+      
+      const latNum = parseFloat(latStr.replace(',', '.'));
+      const lngNum = parseFloat(lngStr.replace(',', '.'));
+      const hasCoords = !isNaN(latNum) && !isNaN(lngNum) && latNum !== 0 && lngNum !== 0;
+      
+      if (!endereco && !hasCoords) {
+        errors.push(`Linha ${numLinha} (Pedido ${pedido}): Deve conter 'EnderecoEntrega' ou 'LatitudeEntrega' e 'LongitudeEntrega' válidos.`);
+        continue;
+      }
+      
+      const valor = parseFloat(valorStr.replace(',', '.'));
+      if (isNaN(valor)) {
+        errors.push(`Linha ${numLinha} (Pedido ${pedido}): Coluna 'ValorRecebido' deve ser numérica (valor informado: '${valorStr}').`);
+        continue;
+      }
+      
+      parsedItems.push({
+        NumeroPedido: pedido,
+        NrNotaFiscal: nota,
+        NomeCliente: cliente,
+        EnderecoEntrega: endereco,
+        Bairro: bairro,
+        Cidade: cidade,
+        CEP: cep,
+        UFEntrega: uf,
+        ValorRecebido: valor,
+        TipoPagamento: pagamento,
+        DataEntrega: dataStr,
+        LatitudeEntrega: hasCoords ? String(latNum) : '',
+        LongitudeEntrega: hasCoords ? String(lngNum) : '',
+        Observacoes: obs,
+        HoraRecebimentoInicio1: hInicio1,
+        HoraRecebimentoFim1: hFim1,
+        HoraRecebimentoInicio2: hInicio2,
+        HoraRecebimentoFim2: hFim2
+      });
+    }
+    
+    setImportData(parsedItems);
+    setImportErrors(errors);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,140 +246,61 @@ export default function Entregas() {
     setImportFile(file);
     
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      if (!text) return;
-      
-      const lines = text.split(/\r?\n/);
-      if (lines.length <= 1) {
-        setImportErrors(['A planilha está vazia ou sem cabeçalhos.']);
-        return;
-      }
-      
-      const headerLine = lines[0];
-      let separator = ';';
-      if (headerLine.includes(',') && !headerLine.includes(';')) {
-        separator = ',';
-      }
-      
-      const headers = headerLine.split(separator).map(h => h.replace(/^"|"$/g, '').trim());
-      const parsedItems: any[] = [];
-      const errors: string[] = [];
-      
-      const colIndex = (name: string) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
-      
-      const idxPedido = colIndex('NumeroPedido');
-      const idxNota = colIndex('NrNotaFiscal');
-      const idxCliente = colIndex('NomeCliente');
-      const idxEndereco = colIndex('EnderecoEntrega');
-      const idxBairro = colIndex('Bairro');
-      const idxCidade = colIndex('Cidade');
-      const idxCep = colIndex('CEP');
-      const idxUf = colIndex('UFEntrega');
-      const idxValor = colIndex('ValorRecebido');
-      const idxPagamento = colIndex('TipoPagamento');
-      const idxData = colIndex('DataEntrega');
-      const idxLat = colIndex('LatitudeEntrega');
-      const idxLng = colIndex('LongitudeEntrega');
-      const idxObs = colIndex('Observacoes');
-      const idxHInicio1 = colIndex('HoraRecebimentoInicio1');
-      const idxHFim1 = colIndex('HoraRecebimentoFim1');
-      const idxHInicio2 = colIndex('HoraRecebimentoInicio2');
-      const idxHFim2 = colIndex('HoraRecebimentoFim2');
-      
-      if (idxPedido === -1 || idxNota === -1 || idxCliente === -1) {
-        setImportErrors(['Cabeçalhos obrigatórios ausentes. Certifique-se de que a planilha possui as colunas: NumeroPedido, NrNotaFiscal, NomeCliente.']);
-        return;
-      }
-      
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
+    
+    if (file.name.endsWith('.csv')) {
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        if (!text) return;
         
-        let rowCells: string[] = [];
-        if (separator === ';') {
-          rowCells = line.split(';').map(c => c.replace(/^"|"$/g, '').trim());
-        } else {
-          const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
-          rowCells = matches ? matches.map(c => c.replace(/^"|"$/g, '').trim()) : line.split(',').map(c => c.trim());
+        const lines = text.split(/\r?\n/);
+        if (lines.length <= 1) {
+          setImportErrors(['A planilha está vazia ou sem cabeçalhos.']);
+          return;
         }
         
-        const getValue = (idx: number) => (idx !== -1 && rowCells[idx] !== undefined) ? rowCells[idx] : '';
-        
-        const numLinha = i + 1;
-        const pedido = getValue(idxPedido);
-        const nota = getValue(idxNota);
-        const cliente = getValue(idxCliente);
-        const endereco = getValue(idxEndereco);
-        const bairro = getValue(idxBairro);
-        const cidade = getValue(idxCidade);
-        const cep = getValue(idxCep);
-        const uf = getValue(idxUf) || 'SP';
-        const valorStr = getValue(idxValor) || '0';
-        const pagamento = getValue(idxPagamento) || 'A Faturar';
-        const dataStr = getValue(idxData);
-        const latStr = getValue(idxLat);
-        const lngStr = getValue(idxLng);
-        const obs = getValue(idxObs);
-        const hInicio1 = getValue(idxHInicio1);
-        const hFim1 = getValue(idxHFim1);
-        const hInicio2 = getValue(idxHInicio2);
-        const hFim2 = getValue(idxHFim2);
-        
-        if (!pedido) {
-          errors.push(`Linha ${numLinha}: Coluna 'NumeroPedido' está vazia.`);
-          continue;
-        }
-        if (!nota) {
-          errors.push(`Linha ${numLinha}: Coluna 'NrNotaFiscal' está vazia.`);
-          continue;
-        }
-        if (!cliente) {
-          errors.push(`Linha ${numLinha}: Coluna 'NomeCliente' está vazia.`);
-          continue;
+        const headerLine = lines[0];
+        let separator = ';';
+        if (headerLine.includes(',') && !headerLine.includes(';')) {
+          separator = ',';
         }
         
-        const latNum = parseFloat(latStr.replace(',', '.'));
-        const lngNum = parseFloat(lngStr.replace(',', '.'));
-        const hasCoords = !isNaN(latNum) && !isNaN(lngNum) && latNum !== 0 && lngNum !== 0;
+        const headers = headerLine.split(separator).map(h => h.replace(/^"|"$/g, '').trim());
+        processParsedRows(headers, lines.slice(1).map(line => {
+          if (separator === ';') {
+            return line.split(';').map(c => c.replace(/^"|"$/g, '').trim());
+          } else {
+            const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+            return matches ? matches.map(c => c.replace(/^"|"$/g, '').trim()) : line.split(',').map(c => c.trim());
+          }
+        }));
+      };
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      reader.onload = (event) => {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
         
-        if (!endereco.trim() && !hasCoords) {
-          errors.push(`Linha ${numLinha} (Pedido ${pedido}): Deve conter 'EnderecoEntrega' ou 'LatitudeEntrega' e 'LongitudeEntrega' válidos.`);
-          continue;
+        const rows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
+        if (rows.length <= 1) {
+          setImportErrors(['A planilha está vazia ou sem cabeçalhos.']);
+          return;
         }
         
-        const valor = parseFloat(valorStr.replace(',', '.'));
-        if (isNaN(valor)) {
-          errors.push(`Linha ${numLinha} (Pedido ${pedido}): Coluna 'ValorRecebido' deve ser numérica (valor informado: '${valorStr}').`);
-          continue;
-        }
-        
-        parsedItems.push({
-          NumeroPedido: pedido,
-          NrNotaFiscal: nota,
-          NomeCliente: cliente,
-          EnderecoEntrega: endereco,
-          Bairro: bairro,
-          Cidade: cidade,
-          CEP: cep,
-          UFEntrega: uf,
-          ValorRecebido: valor,
-          TipoPagamento: pagamento,
-          DataEntrega: dataStr,
-          LatitudeEntrega: hasCoords ? String(latNum) : '',
-          LongitudeEntrega: hasCoords ? String(lngNum) : '',
-          Observacoes: obs,
-          HoraRecebimentoInicio1: hInicio1,
-          HoraRecebimentoFim1: hFim1,
-          HoraRecebimentoInicio2: hInicio2,
-          HoraRecebimentoFim2: hFim2
+        const headers = (rows[0] as any[]).map(h => String(h || '').trim());
+        const dataRows = rows.slice(1).map(row => {
+          const formattedRow: string[] = [];
+          for (let colIdx = 0; colIdx < headers.length; colIdx++) {
+            formattedRow.push(row[colIdx] !== undefined ? String(row[colIdx]) : '');
+          }
+          return formattedRow;
         });
-      }
-      
-      setImportData(parsedItems);
-      setImportErrors(errors);
-    };
-    reader.readAsText(file, 'UTF-8');
+        
+        processParsedRows(headers, dataRows);
+      };
+      reader.readAsArrayBuffer(file);
+    }
   };
 
   const handleConfirmImport = async () => {
@@ -331,7 +359,7 @@ export default function Entregas() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>Importar Planilha de Entregas</h3>
-              <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>Selecione o arquivo CSV ou Excel com as entregas.</p>
+              <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>Selecione o arquivo Excel (.xlsx, .xls) ou CSV com as entregas.</p>
             </div>
             <span style={{ fontSize: '0.75rem', color: '#8c2cf5', background: '#f3f0ff', padding: '4px 8px', borderRadius: '4px', fontWeight: 600 }}>Lote #{idLote}</span>
           </div>
@@ -339,7 +367,7 @@ export default function Entregas() {
           {/* Passo 1: Download de Modelo */}
           <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e9ecef' }}>
             <div>
-              <h5 style={{ margin: 0, fontSize: '0.85rem', color: '#495057', fontWeight: 700 }}>1. Planilha Modelo de Exemplo</h5>
+              <h5 style={{ margin: 0, fontSize: '0.85rem', color: '#495057', fontWeight: 700 }}>1. Planilha Modelo de Exemplo (.xlsx)</h5>
               <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#868e96' }}>Baixe o modelo pré-formatado para preencher.</p>
             </div>
             <button
@@ -353,10 +381,10 @@ export default function Entregas() {
 
           {/* Passo 2: Upload de Arquivo */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>2. Upload do Arquivo (.csv)</label>
+            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>2. Upload do Arquivo (.xlsx, .xls, .csv)</label>
             <input
               type="file"
-              accept=".csv"
+              accept=".xlsx, .xls, .csv"
               onChange={handleFileChange}
               style={{ padding: '12px', borderRadius: '10px', border: '1.5px dashed #ced4da', background: '#f8f9fe', outline: 'none', cursor: 'pointer', fontSize: '0.85rem' }}
             />
