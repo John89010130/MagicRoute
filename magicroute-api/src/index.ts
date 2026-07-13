@@ -122,7 +122,7 @@ app.get('/BuscaEntregasData', async (req, res) => {
   if (codigoMotorista && codigoMotorista !== 'undefined' && codigoMotorista !== 'null' && codigoMotorista.trim() !== '') {
     filterQuery += ` AND ent.CodigoMotorista = ${codigoMotorista}`;
   }
-  if (dataInicialISO && dataFinalISO) {
+  if (dataInicialISO && dataFinalISO && req.query.ignorarData !== 'true') {
     filterQuery += ` AND CONVERT(DATE, ent.DataEntrega, 103) BETWEEN '${dataInicialISO}' AND '${dataFinalISO}'`;
   }
 

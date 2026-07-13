@@ -10,26 +10,16 @@ export default function Inicio() {
   const [lotes, setLotes] = useState<any[]>([]);
   const [abaAtiva, setAbaAtiva] = useState<'abertos' | 'finalizados'>('abertos');
   const [loading, setLoading] = useState(true);
-  const [dataFiltro, setDataFiltro] = useState(() => {
-    const today = new Date();
-    const y = today.getFullYear();
-    const m = String(today.getMonth() + 1).padStart(2, '0');
-    const d = String(today.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  });
-  const [showDatePicker, setShowDatePicker] = useState(false);
-
   const fetchLotes = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const [y, m, d] = dataFiltro.split('-');
-      const dataFormatada = `${d}/${m}/${y}`;
       const result = await buscarEntregasPorData(
         user.idEmpresa,
         user.codigo,
-        dataFormatada,
-        dataFormatada
+        undefined,
+        undefined,
+        true // ignorarData
       );
       setLotes(result || []);
     } catch (err) {
@@ -42,7 +32,7 @@ export default function Inicio() {
 
   useEffect(() => {
     fetchLotes();
-  }, [dataFiltro, user]);
+  }, [user]);
 
   const handleLoteClick = (lote: any) => {
     navigate(`/entregas?idLote=${lote.IDLote}`);
@@ -263,65 +253,7 @@ export default function Inicio() {
         )}
       </div>
 
-      {/* Date Picker Overlay flutuante */}
-      {showDatePicker && (
-        <div style={{
-          position: 'absolute',
-          bottom: '110px',
-          right: '24px',
-          background: '#ffffff',
-          borderRadius: '16px',
-          padding: '16px',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-          border: '1.5px solid #eaeaea',
-          zIndex: 110,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px'
-        }}>
-          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#8c2cf5', textTransform: 'uppercase' }}>Filtrar por data</label>
-          <input 
-            type="date" 
-            value={dataFiltro} 
-            onChange={(e) => {
-              setDataFiltro(e.target.value);
-              setShowDatePicker(false);
-            }}
-            style={{
-              padding: '8px 12px',
-              borderRadius: '8px',
-              border: '1.5px solid #ced4da',
-              outline: 'none',
-              fontSize: '0.9rem'
-            }}
-          />
-        </div>
-      )}
 
-      {/* Botão flutuante de Calendário no Canto Inferior Direito (Imagem 2) */}
-      <button
-        onClick={() => setShowDatePicker(!showDatePicker)}
-        style={{
-          position: 'absolute',
-          bottom: '40px',
-          right: '24px',
-          width: '56px',
-          height: '56px',
-          borderRadius: '50%',
-          background: '#8c2cf5',
-          color: '#ffffff',
-          border: 'none',
-          boxShadow: '0 4px 15px rgba(140, 44, 245, 0.4)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 100,
-        }}
-        title="Selecionar Data"
-      >
-        <Calendar size={24} />
-      </button>
 
       {/* Footer Roxo Estético (Idêntico ao original da Imagem) */}
       <div style={{

@@ -105,7 +105,8 @@ export async function buscarEntregasPorData(
   idEmpresa: string,
   codigoMotorista: string,
   dataInicial?: string,
-  dataFinal?: string
+  dataFinal?: string,
+  ignorarData?: boolean
 ) {
   return apiRequest('/BuscaEntregasData', {
     params: {
@@ -113,6 +114,7 @@ export async function buscarEntregasPorData(
       CodigoMotorista: codigoMotorista,
       DataIncial: dataInicial,
       DataFinal: dataFinal,
+      ignorarData: ignorarData ? 'true' : undefined
     },
   });
 }
