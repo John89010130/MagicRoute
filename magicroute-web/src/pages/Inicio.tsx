@@ -50,7 +50,7 @@ export default function Inicio() {
       {/* Header Roxo (Imagem 2) */}
       <div style={{
         background: '#8c2cf5',
-        padding: '24px 16px',
+        padding: 'calc(24px + env(safe-area-inset-top, 0px)) 16px 24px 16px',
         color: '#ffffff',
         textAlign: 'center',
         position: 'relative',

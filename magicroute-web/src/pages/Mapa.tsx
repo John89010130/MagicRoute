@@ -674,7 +674,7 @@ export default function Mapa() {
           onClick={() => navigate(`/entregas?idLote=${idLote}`)} 
           style={{ 
             position: 'absolute',
-            top: '16px',
+            top: 'calc(16px + env(safe-area-inset-top, 0px))',
             left: '16px',
             background: 'rgba(255, 255, 255, 0.9)',
             backdropFilter: 'blur(8px)',
@@ -699,7 +699,7 @@ export default function Mapa() {
           onClick={() => setShowRealPath(!showRealPath)}
           style={{ 
             position: 'absolute',
-            top: '16px',
+            top: 'calc(16px + env(safe-area-inset-top, 0px))',
             right: '16px',
             background: showRealPath ? '#2a9d8f' : 'rgba(255, 255, 255, 0.9)',
             backdropFilter: 'blur(8px)',

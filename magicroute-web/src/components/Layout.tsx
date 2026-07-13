@@ -93,7 +93,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             onClick={handleTogglePerfil}
             style={{
               position: 'absolute',
-              top: '20px',
+              top: 'calc(20px + env(safe-area-inset-top, 0px))',
               left: '16px',
               background: '#8c2cf5',
               border: 'none',
@@ -120,7 +120,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           onClick={handleLogout}
           style={{
             position: 'absolute',
-            top: '20px',
+            top: 'calc(20px + env(safe-area-inset-top, 0px))',
             right: '16px',
             background: 'rgba(255,255,255,0.2)',
             border: 'none',

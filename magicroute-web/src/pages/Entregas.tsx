@@ -2058,7 +2058,7 @@ export default function Entregas() {
       {/* Header Roxo com botão voltar e badge do Lote (Imagem 3) */}
       <div style={{
         background: '#8c2cf5',
-        padding: '24px 16px',
+        padding: 'calc(24px + env(safe-area-inset-top, 0px)) 16px 24px 16px',
         color: '#ffffff',
         display: 'flex',
         alignItems: 'center',
