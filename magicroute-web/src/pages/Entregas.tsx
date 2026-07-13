@@ -2069,7 +2069,7 @@ export default function Entregas() {
       }}>
         <button 
           onClick={() => {
-            window.location.href = window.location.origin + window.location.pathname + '#/inicio';
+            window.location.hash = '#/inicio';
             window.location.reload();
           }}
           style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
@@ -2419,7 +2419,7 @@ export default function Entregas() {
             <button
               onClick={() => {
                 setShowCelebration(false);
-                window.location.href = window.location.origin + window.location.pathname + '#/inicio';
+                window.location.hash = '#/inicio';
                 window.location.reload();
               }}
               style={{
