@@ -2126,13 +2126,13 @@ export default function Entregas() {
                   style={{
                     background: isEntregue ? '#f8f9fa' : '#ffffff',
                     opacity: isEntregue ? 0.65 : 1,
-                    borderRadius: '20px',
-                    padding: '16px',
+                    borderRadius: '16px',
+                    padding: '12px',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
                     border: '1.5px solid #eaeaea',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'flex-start',
+                    alignItems: 'center',
                     cursor: isEntregue ? 'default' : 'grab',
                     userSelect: 'none',
                     transition: 'all 0.2s ease',
@@ -2140,29 +2140,29 @@ export default function Entregas() {
                 >
                   {/* Detalhes da Entrega */}
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#495057', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      Pedido: {entrega.NumeroPedido || 'N/A'} • Nota Fiscal: {entrega.NrNotaFiscal || entrega.NRDOCUMENTO || 'N/A'}
-                    </h3>
+                    {/* Linha 1: Pedido, NF e Badge de Sequência */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
+                      <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        📦 Pedido: {entrega.NumeroPedido || 'N/A'} • NF: {entrega.NrNotaFiscal || entrega.NRDOCUMENTO || 'N/A'}
+                      </h3>
+                      <span style={{ fontSize: '0.7rem', background: '#f3e8ff', color: '#8c2cf5', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>
+                        Seq: {entrega.SequenciaRoteirizada || entrega.SEQUENCIA || index + 1}
+                      </span>
+                    </div>
                     
-                    <p style={{ fontSize: '0.8rem', color: '#6c757d', margin: 0 }}>
-                      Cidade: {entrega.Cidade || entrega.CIDADE || 'N/A'} - {entrega.UFEntrega || entrega.UF || 'N/A'} • Bairro: {entrega.Bairro || entrega.BAIRRO || 'N/A'}
+                    {/* Linha 2: Cliente */}
+                    <p style={{ fontSize: '0.82rem', color: '#8c2cf5', fontWeight: 700, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      👤 Cliente: {entrega.NomeCliente || entrega.NOMECLIENTE || 'Cliente'}
                     </p>
                     
-                    {/* Nome do Cliente em Roxo/Negrito (Imagem 3) */}
-                    <p style={{ fontSize: '0.85rem', color: '#8c2cf5', fontWeight: 700, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      Cliente: {entrega.NomeCliente || entrega.NOMECLIENTE || 'Cliente'}
+                    {/* Linha 3: Endereço completo (Endereço, Bairro, Cidade/UF) */}
+                    <p style={{ fontSize: '0.78rem', color: '#334155', fontWeight: 500, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      📍 {entrega.EnderecoEntrega || entrega.ENDERECO || 'Não informado'}, {entrega.Bairro || entrega.BAIRRO || 'N/A'} - {entrega.Cidade || entrega.CIDADE || 'N/A'}/{entrega.UFEntrega || entrega.UF || 'N/A'}
                     </p>
                     
-                    <p style={{ fontSize: '0.82rem', color: '#333333', fontWeight: 600, margin: '2px 0 4px 0', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      Endereço: {entrega.EnderecoEntrega || entrega.ENDERECO || 'Não informado'}
-                    </p>
-                    
-                    <p style={{ fontSize: '0.8rem', color: '#6c757d', margin: 0 }}>
-                      Sequencia: {entrega.SequenciaRoteirizada || entrega.SEQUENCIA || index + 1}
-                    </p>
-                    
-                    <p style={{ fontSize: '0.8rem', color: '#2a9d8f', fontWeight: 600, margin: 0 }}>
-                      Data: {entrega.DataEntrega || entrega.DATAENTREGA || 'N/A'} • Viagem: {entrega.TempoPrevistoEntrega || 'N/A'} • Chegada: {entrega.HoraEntregaPrevista || 'N/A'} (Dist: {entrega.DistanciaPrevista || '0.00'})
+                    {/* Linha 4: Data, Viagem, Chegada e Distância */}
+                    <p style={{ fontSize: '0.76rem', color: '#64748b', margin: 0 }}>
+                      📅 {entrega.DataEntrega || entrega.DATAENTREGA || 'N/A'} • 🕐 Chegada: {entrega.HoraEntregaPrevista || 'N/A'} (Viagem: {entrega.TempoPrevistoEntrega || 'N/A'} • Dist: {entrega.DistanciaPrevista || '0.00'})
                     </p>
 
                     {isEntregue && (
