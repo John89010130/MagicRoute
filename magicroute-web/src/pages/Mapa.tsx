@@ -26,6 +26,7 @@ export default function Mapa() {
   const [hoveredDelivery, setHoveredDelivery] = useState<string | null>(null);
   const [clickedPolyline, setClickedPolyline] = useState<any | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [preserveViewport, setPreserveViewport] = useState(false);
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
@@ -100,6 +101,8 @@ export default function Mapa() {
       }, (result, status) => {
         if (status === window.google.maps.DirectionsStatus.OK && result) {
           setDirectionsResponse(result);
+          // Trava a recentralização após o primeiro carregamento bem sucedido
+          setTimeout(() => setPreserveViewport(true), 1500);
         } else {
           console.error(`Erro ao traçar rota no Google Maps: ${status}`);
         }
@@ -254,6 +257,36 @@ export default function Mapa() {
     }
   };
 
+  const handleRecenterRoute = () => {
+    if (!map || entregas.length === 0) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    
+    const e = entregas[0];
+    const latSaida = Number(e.LatitudeLocalSaida);
+    const lngSaida = Number(e.LongitudeLocalSaida);
+    if (!isNaN(latSaida) && !isNaN(lngSaida) && latSaida !== 0 && lngSaida !== 0) {
+      bounds.extend(new window.google.maps.LatLng(latSaida, lngSaida));
+    }
+    
+    entregas.forEach(ent => {
+      const lat = Number(ent.LatitudeEntrega || ent.Latitude);
+      const lng = Number(ent.LongitudeEntrega || ent.Longitude);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        bounds.extend(new window.google.maps.LatLng(lat, lng));
+      }
+    });
+
+    if (driverLocation) {
+      const lat = Number(driverLocation.Latitude);
+      const lng = Number(driverLocation.Longitude);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        bounds.extend(new window.google.maps.LatLng(lat, lng));
+      }
+    }
+    
+    map.fitBounds(bounds);
+  };
+
   const e_first = entregas[0] || {};
   const nomeMotorista = e_first.NomeMotorista || e_first.Nome || e_first.NOMEMOTORISTA || `Motorista #${e_first.CodigoMotorista || ''}`;
 
@@ -290,9 +323,11 @@ export default function Mapa() {
       <div style={{ height: height, width: '100%', position: 'relative', zIndex: 1 }}>
         <GoogleMap
           mapContainerStyle={{ width: '100%', height: '100%' }}
-          center={center}
-          zoom={13}
-          onLoad={(map) => setMap(map)}
+          center={preserveViewport ? undefined : center}
+          zoom={preserveViewport ? undefined : 13}
+          onLoad={(map) => {
+            setMap(map);
+          }}
           options={{
             disableDefaultUI: false,
             zoomControl: true,
@@ -302,9 +337,10 @@ export default function Mapa() {
         >
           {directionsResponse && (
             <DirectionsRenderer 
-              directions={directionsResponse}
+               directions={directionsResponse}
               options={{
                 suppressMarkers: true,
+                preserveViewport: preserveViewport,
                 polylineOptions: { strokeColor: '#8c2cf5', strokeWeight: 5, strokeOpacity: 0.8 }
               }}
             />
@@ -494,6 +530,32 @@ export default function Mapa() {
             </InfoWindowF>
           )}
         </GoogleMap>
+
+        {/* Botão de Centralizar Rota flutuante */}
+        <button 
+          onClick={handleRecenterRoute}
+          style={{
+            position: 'absolute',
+            bottom: '16px',
+            left: '16px',
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            borderRadius: '10px',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: '#0f172a',
+            cursor: 'pointer',
+            fontWeight: 700,
+            fontSize: '0.85rem',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+            zIndex: 10,
+          }}
+        >
+          <MapIcon size={16} color="#8c2cf5" /> Centralizar Rota
+        </button>
 
         {/* Card Flutuante de Rastreamento em Tempo Real */}
         {driverLocation && (
