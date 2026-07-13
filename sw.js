@@ -46,6 +46,7 @@ self.addEventListener('fetch', (event) => {
     reqUrl.pathname.includes('/api/') ||
     reqUrl.hostname.includes('ngrok') ||
     reqUrl.hostname.includes('loca.lt') ||
+    reqUrl.hostname.includes('trycloudflare.com') ||
     reqUrl.hostname.includes('google') ||
     reqUrl.pathname.includes('UrlCliente') ||
     reqUrl.pathname.includes('BuscaUsuario')
