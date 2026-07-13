@@ -14,7 +14,7 @@ start cmd /k "cd magicroute-web && npm run dev"
 
 :: 3. Iniciar o Tunel da Cloudflare
 echo [3/3] Iniciando Tunel da Cloudflare para a API (Porta 3001)...
-start cmd /k "C:\Program Files (x86)\cloudflared\cloudflared.exe tunnel --url http://localhost:3001"
+start "Cloudflare Tunnel" cmd /k ""C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel run --url http://localhost:3001 magicroute-api"
 
 echo ==================================================
 echo   Todos os servicos foram iniciados!

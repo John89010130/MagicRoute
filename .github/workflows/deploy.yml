@@ -32,7 +32,7 @@ jobs:
           cd magicroute-web
           npm run build
         env:
-          VITE_API_URL: https://connector-employ-brad-nissan.trycloudflare.com
+          VITE_API_URL: https://api.startapp.net.br
           VITE_GOOGLE_MAPS_API_KEY: AIzaSyAmta1q0E63ZqjWC-T-OwydVBIzhFFvnSY
 
       - name: Deploy to GitHub Pages
