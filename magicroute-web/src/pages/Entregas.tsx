@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote, buscarConfiguracoes, finalizarLote, reabrirLote, listarMotoristas, alterarMotoristaLote } from '../services/api';
-import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload } from 'lucide-react';
+import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload, XCircle } from 'lucide-react';
 
 export default function Entregas() {
   const { user } = useAuth();
@@ -1001,7 +1001,15 @@ export default function Entregas() {
       window.location.href = wazeUrl;
     }
 
-    // 2. Disparar início do rastreamento GPS
+    // 2. Atualizar estado local instantaneamente para que a UI mostre 'Em Transporte'
+    setEntregas(prev => prev.map(ent => {
+      if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
+        return { ...ent, StatusEntrega: 'Em Transporte', SITUACAOENTREGA: 'Em Transporte' };
+      }
+      return ent;
+    }));
+
+    // 3. Disparar início do rastreamento GPS
     window.dispatchEvent(new CustomEvent('iniciar-gps', {
       detail: {
         idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
@@ -1010,13 +1018,38 @@ export default function Entregas() {
       }
     }));
 
-    // 3. Registrar o evento no banco (assíncrono)
+    // 4. Registrar o evento no banco (assíncrono)
     const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
     try {
       await gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave);
       await fetchEntregas();
     } catch (err) {
       console.error('Erro ao iniciar entrega:', err);
+    }
+  };
+
+  const handleCancelarInicio = async (entrega: any) => {
+    if (!user) return;
+    const confirm = window.confirm("Deseja realmente cancelar o trajeto iniciado de entrega?");
+    if (!confirm) return;
+
+    // Disparar parada do GPS
+    window.dispatchEvent(new CustomEvent('parar-gps'));
+
+    // Atualizar UI imediatamente para 'Pendente'
+    setEntregas(prev => prev.map(ent => {
+      if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
+        return { ...ent, StatusEntrega: 'Pendente', SITUACAOENTREGA: 'Pendente' };
+      }
+      return ent;
+    }));
+
+    const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
+    try {
+      await gravarEvento(user.codigo, user.codigo, 'LimpaInicioFinalEntrega', chave);
+      await fetchEntregas();
+    } catch (err) {
+      console.error('Erro ao cancelar início da entrega:', err);
     }
   };
 
@@ -2182,6 +2215,7 @@ export default function Entregas() {
             {entregas.map((entrega, index) => {
               const statusLower = (entrega.StatusEntrega || entrega.SITUACAOENTREGA || '').toLowerCase();
               const isEntregue = statusLower.includes('entregue') || statusLower.includes('concluido') || statusLower.includes('concluído');
+              const isEmTransporte = statusLower.includes('transporte');
 
               return (
                 <div
@@ -2212,9 +2246,16 @@ export default function Entregas() {
                       <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         📦 Pedido: {entrega.NumeroPedido || 'N/A'} • NF: {entrega.NrNotaFiscal || entrega.NRDOCUMENTO || 'N/A'}
                       </h3>
-                      <span style={{ fontSize: '0.7rem', background: '#f3e8ff', color: '#8c2cf5', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>
-                        Seq: {entrega.SequenciaRoteirizada || entrega.SEQUENCIA || index + 1}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {isEmTransporte && (
+                          <span style={{ fontSize: '0.7rem', background: '#e0f2fe', color: '#0369a1', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>
+                            Em Transporte
+                          </span>
+                        )}
+                        <span style={{ fontSize: '0.7rem', background: '#f3e8ff', color: '#8c2cf5', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>
+                          Seq: {entrega.SequenciaRoteirizada || entrega.SEQUENCIA || index + 1}
+                        </span>
+                      </div>
                     </div>
                     
                     {/* Linha 2: Cliente */}
@@ -2266,26 +2307,49 @@ export default function Entregas() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '12px' }}>
                     {!isEntregue ? (
                       <>
-                        {/* Botão Vermelho Iniciar Transporte (GPS Waze) */}
-                        <button 
-                          onClick={() => handleIniciarEntrega(entrega)}
-                          style={{
-                            background: '#e63946',
-                            color: 'white',
-                            border: 'none',
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 5px rgba(230, 57, 70, 0.2)'
-                          }}
-                          title="Iniciar com Waze"
-                        >
-                          <Navigation size={16} style={{ transform: 'rotate(90deg)' }} />
-                        </button>
+                        {isEmTransporte ? (
+                          /* Botão Vermelho Cancelar Início de Entrega */
+                          <button 
+                            onClick={() => handleCancelarInicio(entrega)}
+                            style={{
+                              background: '#e63946',
+                              color: 'white',
+                              border: 'none',
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '8px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 5px rgba(230, 57, 70, 0.2)'
+                            }}
+                            title="Cancelar início de entrega"
+                          >
+                            <XCircle size={16} />
+                          </button>
+                        ) : (
+                          /* Botão Azul Iniciar Transporte (GPS Waze) */
+                          <button 
+                            onClick={() => handleIniciarEntrega(entrega)}
+                            style={{
+                              background: '#2563eb',
+                              color: 'white',
+                              border: 'none',
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '8px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 5px rgba(37, 99, 235, 0.2)'
+                            }}
+                            title="Iniciar com Waze"
+                          >
+                            <Navigation size={16} style={{ transform: 'rotate(90deg)' }} />
+                          </button>
+                        )}
 
                         {/* Botão Verde Finalizar */}
                         <button 

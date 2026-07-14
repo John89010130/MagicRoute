@@ -3,12 +3,26 @@ import { gravarPontoGPS } from '../services/api';
 
 export function useGpsTracker() {
   const watchIdRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const startWatcher = (idEmpresa: string, idLote: string, numeroPedido: string) => {
     // Limpar watcher anterior se houver
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
+    }
+
+    // Iniciar áudio silencioso em segundo plano para manter a aba ativa no mobile
+    try {
+      if (!audioRef.current) {
+        audioRef.current = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+        audioRef.current.loop = true;
+      }
+      audioRef.current.play()
+        .then(() => console.log('[GPS Tracker] Áudio silencioso em segundo plano iniciado.'))
+        .catch((err) => console.warn('[GPS Tracker] Reprodução de áudio silencioso bloqueada ou falhou:', err));
+    } catch (audioErr) {
+      console.error('[GPS Tracker] Erro ao instanciar áudio silencioso:', audioErr);
     }
 
     if (!navigator.geolocation) {
@@ -53,6 +67,15 @@ export function useGpsTracker() {
       console.log('[GPS Tracker] Parando rastreamento...');
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
+    }
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current = null;
+        console.log('[GPS Tracker] Áudio silencioso parado.');
+      } catch (audioErr) {
+        console.error('[GPS Tracker] Erro ao pausar áudio:', audioErr);
+      }
     }
   };
 
