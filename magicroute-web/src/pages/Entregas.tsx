@@ -989,15 +989,16 @@ export default function Entregas() {
     const lng = entrega.LongitudeEntrega || entrega.LONGITUDE;
     const endereco = entrega.EnderecoEntrega || entrega.ENDERECO || '';
     
+    // Usar esquema nativo waze:// para abrir o aplicativo instalado diretamente
     let wazeUrl = '';
     if (lat && lng && lat !== '0' && lng !== '0') {
-      wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+      wazeUrl = `waze://?ll=${lat},${lng}&navigate=yes`;
     } else if (endereco) {
-      wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(endereco)}&navigate=yes`;
+      wazeUrl = `waze://?q=${encodeURIComponent(endereco)}&navigate=yes`;
     }
 
     const executarInicio = () => {
-      // 1. Iniciar áudio silencioso diretamente no clique/gesto para garantir permissão no browser
+      // 1. Iniciar áudio silencioso diretamente no clique/gesto para garantir permissão de reprodução
       try {
         const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
         audio.loop = true;
@@ -1011,53 +1012,52 @@ export default function Entregas() {
         console.error('[GPS] Falha ao configurar áudio:', audioErr);
       }
 
-      // 2. Solicitar geolocalização nativa do navegador (exibe o popup de permissão se ainda não concedida)
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // Permissão concedida!
-          
-          // 3. Atualizar estado local instantaneamente para que a UI mostre 'Em Transporte'
-          setEntregas(prev => prev.map(ent => {
-            if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
-              return { ...ent, StatusEntrega: 'Em Transporte', SITUACAOENTREGA: 'Em Transporte' };
+      // 2. Atualizar estado local instantaneamente para que a UI mostre 'Em Transporte'
+      setEntregas(prev => prev.map(ent => {
+        if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
+          return { ...ent, StatusEntrega: 'Em Transporte', SITUACAOENTREGA: 'Em Transporte' };
+        }
+        return ent;
+      }));
+
+      // 3. Disparar início do rastreamento GPS no hook
+      window.dispatchEvent(new CustomEvent('iniciar-gps', {
+        detail: {
+          idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
+          idLote: String(idLote),
+          numeroPedido: String(entrega.NumeroPedido)
+        }
+      }));
+
+      // 4. Registrar o evento no banco (assíncrono)
+      const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
+      gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave)
+        .then(() => fetchEntregas())
+        .catch((err) => console.error('Erro ao registrar início no banco:', err));
+
+      // 5. Solicitar geolocalização rápida (força o popup de permissão se ainda não concedida)
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            console.log('[GPS] Localização obtida com sucesso. Redirecionando para o aplicativo do Waze...');
+            if (wazeUrl) {
+              window.location.href = wazeUrl;
             }
-            return ent;
-          }));
-
-          // 4. Disparar início do rastreamento GPS no hook
-          window.dispatchEvent(new CustomEvent('iniciar-gps', {
-            detail: {
-              idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
-              idLote: String(idLote),
-              numeroPedido: String(entrega.NumeroPedido)
+          },
+          (error) => {
+            console.warn('[GPS] Falha rápida na geolocalização (provavelmente pendente de aceitação ou já negada):', error);
+            // Redireciona de qualquer forma para não travar o motorista
+            if (wazeUrl) {
+              window.location.href = wazeUrl;
             }
-          }));
-
-          // 5. Registrar o evento no banco (assíncrono)
-          const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
-          gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave)
-            .then(() => fetchEntregas())
-            .catch((err) => console.error('Erro ao registrar início no banco:', err));
-
-          // 6. Redirecionar para o Waze
-          if (wazeUrl) {
-            window.location.href = wazeUrl;
-          }
-        },
-        (error) => {
-          console.error('[GPS] Permissão de geolocalização negada ou falhou:', error);
-          alert("Não é possível iniciar a entrega sem permitir o acesso à localização.");
-          
-          // Parar áudio caso a geolocalização tenha sido negada
-          if ((window as any)._gpsSilentAudio) {
-            try {
-              (window as any)._gpsSilentAudio.pause();
-              (window as any)._gpsSilentAudio = null;
-            } catch (e) {}
-          }
-        },
-        { enableHighAccuracy: true, timeout: 8000 }
-      );
+          },
+          { enableHighAccuracy: false, timeout: 3000, maximumAge: Infinity }
+        );
+      } else {
+        if (wazeUrl) {
+          window.location.href = wazeUrl;
+        }
+      }
     };
 
     // Verificar se já possui permissão concedida
@@ -1069,7 +1069,7 @@ export default function Entregas() {
         } else {
           const aceitou = window.confirm(
             "Para acompanhar sua entrega rua a rua (mesmo com o Waze aberto), o navegador solicitará acesso à sua localização.\n\n" +
-            "Por favor, clique em 'OK' e escolha 'Permitir/Sempre permitir' na janela de autorização."
+            "Por favor, clique em 'OK' e escolha 'Permitir/Sempre permitir' na janela de autorização do navegador que será exibida."
           );
           if (aceitou) {
             executarInicio();
