@@ -1000,12 +1000,21 @@ export default function Entregas() {
     const executarInicio = () => {
       // 1. Iniciar áudio silencioso diretamente no clique/gesto para garantir permissão de reprodução
       try {
-        const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+        const audio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV');
         audio.loop = true;
         audio.play()
           .then(() => {
             (window as any)._gpsSilentAudio = audio;
             console.log('[GPS] Áudio silencioso iniciado no clique do usuário.');
+            
+            // Configurar MediaSession para manter o SO ciente de que o player está ativo
+            if ('mediaSession' in navigator) {
+              navigator.mediaSession.metadata = new MediaMetadata({
+                title: 'Rastreamento de Rota Ativo',
+                artist: 'MagicRoute',
+                album: 'Em Transporte'
+              });
+            }
           })
           .catch((err) => console.warn('[GPS] Erro ao reproduzir áudio silencioso:', err));
       } catch (audioErr) {
@@ -1091,6 +1100,11 @@ export default function Entregas() {
     // Disparar parada do GPS
     window.dispatchEvent(new CustomEvent('parar-gps'));
 
+    // Limpar metadados de mídia
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = null;
+    }
+
     // Atualizar UI imediatamente para 'Pendente'
     setEntregas(prev => prev.map(ent => {
       if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
@@ -1102,7 +1116,7 @@ export default function Entregas() {
     const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
     try {
       await gravarEvento(user.codigo, user.codigo, 'LimpaInicioFinalEntrega', chave);
-      await fetchEntregas();
+      window.location.reload(); // Recarrega a página para atualizar o status limpo da base (evita race condition no fetch)
     } catch (err) {
       console.error('Erro ao cancelar início da entrega:', err);
     }

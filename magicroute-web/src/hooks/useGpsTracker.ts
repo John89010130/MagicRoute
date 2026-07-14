@@ -19,11 +19,19 @@ export function useGpsTracker() {
       if (globalAudio) {
         console.log('[GPS Tracker] Utilizando áudio silencioso global iniciado pelo clique.');
       } else if (!audioRef.current) {
-        audioRef.current = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+        audioRef.current = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV');
         audioRef.current.loop = true;
         audioRef.current.play()
           .then(() => console.log('[GPS Tracker] Áudio silencioso em segundo plano iniciado.'))
           .catch((err) => console.warn('[GPS Tracker] Reprodução de áudio silencioso bloqueada ou falhou:', err));
+      }
+
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: 'Rastreamento de Rota Ativo',
+          artist: 'MagicRoute',
+          album: 'Em Transporte'
+        });
       }
     } catch (audioErr) {
       console.error('[GPS Tracker] Erro ao instanciar áudio silencioso:', audioErr);
@@ -93,6 +101,11 @@ export function useGpsTracker() {
       } catch (audioErr) {
         console.error('[GPS Tracker] Erro ao pausar áudio global:', audioErr);
       }
+    }
+
+    // Limpar metadados de mídia
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = null;
     }
   };
 
