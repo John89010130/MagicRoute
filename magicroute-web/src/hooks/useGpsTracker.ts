@@ -14,13 +14,17 @@ export function useGpsTracker() {
 
     // Iniciar áudio silencioso em segundo plano para manter a aba ativa no mobile
     try {
-      if (!audioRef.current) {
+      // Se já houver um áudio iniciado globalmente via gesto de clique, nós o respeitamos e não criamos outro
+      const globalAudio = (window as any)._gpsSilentAudio;
+      if (globalAudio) {
+        console.log('[GPS Tracker] Utilizando áudio silencioso global iniciado pelo clique.');
+      } else if (!audioRef.current) {
         audioRef.current = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
         audioRef.current.loop = true;
+        audioRef.current.play()
+          .then(() => console.log('[GPS Tracker] Áudio silencioso em segundo plano iniciado.'))
+          .catch((err) => console.warn('[GPS Tracker] Reprodução de áudio silencioso bloqueada ou falhou:', err));
       }
-      audioRef.current.play()
-        .then(() => console.log('[GPS Tracker] Áudio silencioso em segundo plano iniciado.'))
-        .catch((err) => console.warn('[GPS Tracker] Reprodução de áudio silencioso bloqueada ou falhou:', err));
     } catch (audioErr) {
       console.error('[GPS Tracker] Erro ao instanciar áudio silencioso:', audioErr);
     }
@@ -68,13 +72,26 @@ export function useGpsTracker() {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
+    
+    // Parar áudio interno do hook
     if (audioRef.current) {
       try {
         audioRef.current.pause();
         audioRef.current = null;
-        console.log('[GPS Tracker] Áudio silencioso parado.');
+        console.log('[GPS Tracker] Áudio silencioso local parado.');
       } catch (audioErr) {
-        console.error('[GPS Tracker] Erro ao pausar áudio:', audioErr);
+        console.error('[GPS Tracker] Erro ao pausar áudio local:', audioErr);
+      }
+    }
+
+    // Parar áudio global iniciado na página
+    if ((window as any)._gpsSilentAudio) {
+      try {
+        (window as any)._gpsSilentAudio.pause();
+        (window as any)._gpsSilentAudio = null;
+        console.log('[GPS Tracker] Áudio silencioso global parado.');
+      } catch (audioErr) {
+        console.error('[GPS Tracker] Erro ao pausar áudio global:', audioErr);
       }
     }
   };
