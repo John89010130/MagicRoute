@@ -2664,6 +2664,21 @@ export default function Entregas() {
           `}</style>
         </div>
       )}
+      
+      {/* Indicador de versão imperceptível no rodapé para controle do cache PWA */}
+      <div style={{
+        textAlign: 'center',
+        fontSize: '0.62rem',
+        color: '#94a3b8',
+        padding: '12px 0 20px 0',
+        opacity: 0.35,
+        fontFamily: 'monospace',
+        pointerEvents: 'none',
+        userSelect: 'none',
+        width: '100%'
+      }}>
+        Versão: 1.1.2 - Atualizado em 17/07 15:00 (GPS Fix)
+      </div>
     </div>
   );
 }
