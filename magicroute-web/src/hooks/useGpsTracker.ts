@@ -183,9 +183,9 @@ export function useGpsTracker() {
         },
         (err) => adicionarGpsLog(`Erro no GPS do Timer: ${err.message}`),
         {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 10000
+          enableHighAccuracy: false, // Usar baixa precisão no background para evitar o bloqueio de hardware do iOS/Safari
+          maximumAge: 15000, // Aceitar posições em cache de até 15 segundos
+          timeout: 4000 // Timeout menor para evitar acumular requisições pendentes
         }
       );
     }, 5000);
