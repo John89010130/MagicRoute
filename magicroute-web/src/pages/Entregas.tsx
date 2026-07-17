@@ -1000,7 +1000,18 @@ export default function Entregas() {
     const executarInicio = () => {
       // 1. Iniciar áudio silencioso diretamente no clique/gesto para garantir permissão de reprodução
       try {
-        const audio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV');
+        // Configurar AudioSession para playback no iOS
+        if ('audioSession' in navigator) {
+          try {
+            (navigator as any).audioSession.type = 'playback';
+            console.log('[GPS] AudioSession configurada para playback no clique.');
+          } catch (sessionErr) {
+            console.warn('[GPS] Erro ao configurar AudioSession.type:', sessionErr);
+          }
+        }
+
+        // Usar o mesmo WAV silencioso minimalista compatível
+        const audio = new Audio('data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA==');
         audio.loop = true;
         audio.play()
           .then(() => {

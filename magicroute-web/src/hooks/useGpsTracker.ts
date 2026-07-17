@@ -43,7 +43,7 @@ export function useGpsTracker() {
     }
 
     console.log(`[GPS Tracker] Iniciando rastreamento para Pedido ${numeroPedido}...`);
-    
+
     // Gravar ponto inicial imediatamente
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -80,7 +80,7 @@ export function useGpsTracker() {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
-    
+
     // Parar áudio interno do hook
     if (audioRef.current) {
       try {

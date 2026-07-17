@@ -27,6 +27,12 @@ export default function Mapa() {
   const [clickedPolyline, setClickedPolyline] = useState<any | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [preserveViewport, setPreserveViewport] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
@@ -214,6 +220,30 @@ export default function Mapa() {
   };
 
   const driverLocation = getDriverCurrentLocation();
+
+  const formatGpsTime = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return 'N/A';
+      
+      const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const elapsedMs = now - date.getTime();
+      const elapsedSec = Math.max(0, Math.floor(elapsedMs / 1000));
+      
+      let relativeStr = '';
+      if (elapsedSec < 60) {
+        relativeStr = elapsedSec <= 3 ? 'agora mesmo' : `há ${elapsedSec}s`;
+      } else {
+        const elapsedMin = Math.floor(elapsedSec / 60);
+        relativeStr = `há ${elapsedMin}min`;
+      }
+      
+      return `${timeStr} (${relativeStr})`;
+    } catch (e) {
+      return 'N/A';
+    }
+  };
 
   const getActiveDelivery = () => {
     const inTransit = entregas.find(ent => {
@@ -492,6 +522,7 @@ export default function Mapa() {
                       <strong style={{ color: '#10b981' }}>Motorista Online (GPS)</strong>
                     </div>
                     <strong>Motorista:</strong> {nomeMotorista}<br />
+                    <strong>Último sinal:</strong> {formatGpsTime(driverLocation.DataRegistro || driverLocation.dataRegistro)}<br />
                     {activeDelivery ? (
                       <>
                         <strong>Indo para:</strong> {activeDelivery.NomeCliente}<br />
@@ -617,6 +648,9 @@ export default function Mapa() {
               </div>
               <div style={{ flex: 1 }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>{nomeMotorista}</p>
+                <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>
+                  Sinal: {formatGpsTime(driverLocation.DataRegistro || driverLocation.dataRegistro)}
+                </p>
                 {activeDelivery ? (
                   <>
                     <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
