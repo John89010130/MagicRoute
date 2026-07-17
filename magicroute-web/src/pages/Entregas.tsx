@@ -1071,12 +1071,13 @@ export default function Entregas() {
         return ent;
       }));
 
-      // Disparar início do rastreamento GPS no hook
+      // Disparar início do rastreamento GPS no hook (passando o áudio ativo do gesto de clique)
       window.dispatchEvent(new CustomEvent('iniciar-gps', {
         detail: {
           idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
           idLote: String(idLote),
-          numeroPedido: String(entrega.NumeroPedido)
+          numeroPedido: String(entrega.NumeroPedido),
+          audioElement: audio
         }
       }));
 
@@ -2823,7 +2824,7 @@ export default function Entregas() {
         userSelect: 'none',
         width: '100%'
       }}>
-        Versão: 1.1.6 - Atualizado em 17/07 15:40 (GPS Low-Accuracy Timer)
+        Versão: 1.1.7 - Atualizado em 17/07 15:45 (GPS Audio Pipeline Fix)
       </div>
     </div>
   );

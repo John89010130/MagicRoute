@@ -73,16 +73,16 @@ export function useGpsTracker() {
         }
       }
 
-      const globalAudio = (window as any)._gpsSilentAudio;
-      if (globalAudio) {
-        adicionarGpsLog('Utilizando áudio silencioso global iniciado pelo clique.');
-      } else if (!audioRef.current) {
+      if (!audioRef.current) {
+        adicionarGpsLog('Criando novo elemento de áudio silencioso local.');
         audioRef.current = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV');
         audioRef.current.loop = true;
-        audioRef.current.play()
-          .then(() => adicionarGpsLog('Áudio silencioso local iniciado.'))
-          .catch((err: any) => adicionarGpsLog(`Erro ao iniciar áudio local: ${err.message}`));
       }
+
+      adicionarGpsLog('Garantindo reprodução ativa do áudio silencioso...');
+      audioRef.current.play()
+        .then(() => adicionarGpsLog('Áudio silencioso iniciado e tocando ativamente.'))
+        .catch((err: any) => adicionarGpsLog(`Alerta de Áudio: ${err.message}`));
 
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -259,8 +259,12 @@ export function useGpsTracker() {
 
     const handleStartEvent = (e: Event) => {
       const customEvent = e as CustomEvent;
-      const { idEmpresa, idLote, numeroPedido } = customEvent.detail;
+      const { idEmpresa, idLote, numeroPedido, audioElement } = customEvent.detail;
       adicionarGpsLog(`Evento iniciar-gps recebido para pedido ${numeroPedido}.`);
+      if (audioElement) {
+        adicionarGpsLog('Elemento de áudio recebido do evento de gesto de clique.');
+        audioRef.current = audioElement;
+      }
       localStorage.setItem('gps_tracking_active', JSON.stringify({ idEmpresa, idLote, numeroPedido }));
       startWatcher(idEmpresa, idLote, numeroPedido);
     };
