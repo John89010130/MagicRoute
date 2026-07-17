@@ -2823,7 +2823,7 @@ export default function Entregas() {
         userSelect: 'none',
         width: '100%'
       }}>
-        Versão: 1.1.4 - Atualizado em 17/07 15:25 (GPS Copy Logs)
+        Versão: 1.1.5 - Atualizado em 17/07 15:30 (GPS WebKit Safe JSON)
       </div>
     </div>
   );

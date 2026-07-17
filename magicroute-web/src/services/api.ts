@@ -66,13 +66,22 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
   }
 
   const response = await fetch(url, fetchOptions);
+  const text = await response.text();
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || errorData.mensagem || `Erro ${response.status}`);
+    let errMsg = `Erro ${response.status}`;
+    try {
+      const errorData = JSON.parse(text);
+      errMsg = errorData.message || errorData.mensagem || errMsg;
+    } catch (e) {}
+    throw new Error(errMsg);
   }
 
-  return response.json();
+  try {
+    return text ? JSON.parse(text) : ({} as any);
+  } catch (parseErr) {
+    return text as any;
+  }
 }
 
 // ==========================================
