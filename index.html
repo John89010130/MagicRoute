@@ -17,12 +17,39 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./sw.js')
-            .then((reg) => console.log('[PWA] Service Worker registrado com sucesso!', reg.scope))
+            .then((reg) => {
+              console.log('[PWA] Service Worker registrado com sucesso!', reg.scope);
+              
+              // Monitorar atualizações
+              reg.onupdatefound = () => {
+                const installingWorker = reg.installing;
+                if (installingWorker) {
+                  installingWorker.onstatechange = () => {
+                    if (installingWorker.state === 'installed') {
+                      if (navigator.serviceWorker.controller) {
+                        console.log('[PWA] Nova versão instalada. Recarregando...');
+                        window.location.reload();
+                      }
+                    }
+                  };
+                }
+              };
+            })
             .catch((err) => console.error('[PWA] Falha ao registrar Service Worker:', err));
+        });
+
+        // Recarregar a página assim que o novo service worker assumir o controle (skipWaiting)
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            console.log('[PWA] Novo Service Worker assumiu o controle. Recarregando aba...');
+            window.location.reload();
+          }
         });
       }
     </script>
-    <script type="module" crossorigin src="./assets/index-IF0Vwp26.js"></script>
+    <script type="module" crossorigin src="./assets/index-C7Gl8Yw-.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-DOM0R5Tg.css">
   </head>
   <body>
