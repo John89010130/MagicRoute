@@ -1035,64 +1035,70 @@ export default function Entregas() {
       return;
     }
 
-    // 2. Aciona o popup real de permissão nativa de localização
+    // 2. Aciona o popup real de permissão nativa de localização (baixa precisão para ser instantâneo e funcionar em ambientes fechados)
     console.log('[GPS] Solicitando permissão nativa de localização...');
+    
+    const prosseguirComEntrega = (permissaoConcedida: boolean) => {
+      // Atualizar estado local instantaneamente para que a UI mostre 'Em Transporte'
+      setEntregas(prev => prev.map(ent => {
+        if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
+          return { ...ent, StatusEntrega: 'Em Transporte', SITUACAOENTREGA: 'Em Transporte' };
+        }
+        return ent;
+      }));
+
+      // Disparar início do rastreamento GPS no hook
+      window.dispatchEvent(new CustomEvent('iniciar-gps', {
+        detail: {
+          idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
+          idLote: String(idLote),
+          numeroPedido: String(entrega.NumeroPedido)
+        }
+      }));
+
+      // Registrar o evento no banco (assíncrono)
+      const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
+      gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave)
+        .then(() => fetchEntregas())
+        .catch((err) => console.error('Erro ao registrar início no banco:', err));
+
+      // 3. Redirecionar para o Waze
+      if (wazeUrl) {
+        window.location.href = wazeUrl;
+      }
+    };
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        console.log('[GPS] Localização capturada! Permissão concedida pelo usuário.');
-
-        // Atualizar estado local instantaneamente para que a UI mostre 'Em Transporte'
-        setEntregas(prev => prev.map(ent => {
-          if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
-            return { ...ent, StatusEntrega: 'Em Transporte', SITUACAOENTREGA: 'Em Transporte' };
-          }
-          return ent;
-        }));
-
-        // Disparar início do rastreamento GPS no hook
-        window.dispatchEvent(new CustomEvent('iniciar-gps', {
-          detail: {
-            idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
-            idLote: String(idLote),
-            numeroPedido: String(entrega.NumeroPedido)
-          }
-        }));
-
-        // Registrar o evento no banco (assíncrono)
-        const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
-        gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave)
-          .then(() => fetchEntregas())
-          .catch((err) => console.error('Erro ao registrar início no banco:', err));
-
-        // 3. Redirecionar para o Waze somente após o motorista ter aceito a permissão nativa
-        if (wazeUrl) {
-          window.location.href = wazeUrl;
-        }
+        console.log('[GPS] Localização capturada com sucesso.');
+        prosseguirComEntrega(true);
       },
       (error) => {
-        console.error('[GPS] Falha ao obter localização nativa:', error);
+        console.error('[GPS] Falha ao obter localização inicial:', error);
         
-        // Parar o áudio iniciado se o usuário negar ou falhar
-        if (audio) {
-          try {
-            audio.pause();
-            (window as any)._gpsSilentAudio = null;
-          } catch (e) {}
-        }
-
+        // Parar o áudio iniciado se o usuário negar expressamente a localização
         if (error.code === error.PERMISSION_DENIED) {
+          if (audio) {
+            try {
+              audio.pause();
+              (window as any)._gpsSilentAudio = null;
+            } catch (e) {}
+          }
           alert(
-            "Acesso à Localização Negado!\n\n" +
-            "Para iniciar o trajeto e abrir o Waze, você PRECISA permitir o acesso à localização na janela de permissão do celular."
+            "Atenção: Acesso à localização foi negado.\n\n" +
+            "O Waze será aberto, mas o rastreamento da sua rota em segundo plano não funcionará até que você conceda permissão de localização para o navegador nas configurações do celular."
           );
+          prosseguirComEntrega(false);
         } else {
-          alert("Não foi possível obter sua localização. Certifique-se de que o GPS do celular está ativo e tente novamente.");
+          // Erros de timeout ou posição indisponível (comum em locais fechados)
+          console.warn('[GPS] Erro de rede/timeout do GPS (comum em locais fechados). Prosseguindo mesmo assim...');
+          prosseguirComEntrega(true);
         }
       },
       {
-        enableHighAccuracy: true,
-        timeout: 20000, // Dá 20 segundos para o motorista interagir com a caixinha nativa
-        maximumAge: 0
+        enableHighAccuracy: false, // Baixa precisão (rede/Wi-Fi/Cell towers) é instantânea dentro de prédios
+        timeout: 6000, // 6 segundos de tolerância para o prompt
+        maximumAge: 30000 // Aceita posições em cache de até 30 segundos
       }
     );
   };
