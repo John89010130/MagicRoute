@@ -5,6 +5,7 @@ interface RequestOptions {
   params?: Record<string, string | number | undefined>;
   body?: Record<string, any>;
   json?: boolean;
+  keepalive?: boolean;
 }
 
 // Limpar URLs legadas antigas (Ngrok/Localtunnel) salvas no LocalStorage dos clientes
@@ -48,6 +49,7 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
     headers,
     cache: 'no-store', // Prevent aggressive browser caching of GET requests
     credentials: 'include', // Enviar cookies (como o do ngrok) nas requisições CORS
+    keepalive: options.keepalive,
   };
 
   if (body) {
@@ -202,6 +204,7 @@ export async function gravarEvento(
   return apiRequest('/api/entregas/gravar-evento', {
     method: 'POST',
     body: { CodigoUsuario: codigoUsuario, CodigoMotorista: codigoMotorista, TipoEvento: tipoEvento, Chave: chave },
+    keepalive: true,
   });
 }
 
@@ -377,7 +380,8 @@ export async function gravarPontoGPS(
       Latitude: latitude,
       Longitude: longitude,
       Accuracy: accuracy
-    }
+    },
+    keepalive: true,
   });
 }
 

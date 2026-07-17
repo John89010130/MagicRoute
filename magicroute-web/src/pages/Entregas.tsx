@@ -4,6 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote, buscarConfiguracoes, finalizarLote, reabrirLote, listarMotoristas, alterarMotoristaLote } from '../services/api';
 import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload, XCircle } from 'lucide-react';
+import { adicionarGpsLog } from '../hooks/useGpsTracker';
 
 export default function Entregas() {
   const { user } = useAuth();
@@ -56,6 +57,27 @@ export default function Entregas() {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [gpsTrace, setGpsTrace] = useState<any>(null);
   const [loadingGpsTrace, setLoadingGpsTrace] = useState(false);
+
+  // Debugger console states
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebugConsole, setShowDebugConsole] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('gps_debug_logs');
+      if (saved) {
+        setDebugLogs(JSON.parse(saved));
+      }
+    } catch (e) {}
+
+    const handleLogAdded = () => {
+      const win = window as any;
+      setDebugLogs([...(win._gpsLogs || [])]);
+    };
+
+    window.addEventListener('gps-log-added', handleLogAdded);
+    return () => window.removeEventListener('gps-log-added', handleLogAdded);
+  }, []);
 
   // States para Importação de Planilha
   const [showImportModal, setShowImportModal] = useState(false);
@@ -1039,6 +1061,8 @@ export default function Entregas() {
     console.log('[GPS] Solicitando permissão nativa de localização...');
     
     const prosseguirComEntrega = (permissaoConcedida: boolean) => {
+      adicionarGpsLog('Iniciando processo de entrega...');
+      
       // Atualizar estado local instantaneamente para que a UI mostre 'Em Transporte'
       setEntregas(prev => prev.map(ent => {
         if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
@@ -1056,16 +1080,27 @@ export default function Entregas() {
         }
       }));
 
-      // Registrar o evento no banco (assíncrono)
+      // Registrar o evento no banco (sincronizado com redirecionamento)
       const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
+      adicionarGpsLog('Gravando início da entrega no banco de dados...');
+      
       gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave)
-        .then(() => fetchEntregas())
-        .catch((err) => console.error('Erro ao registrar início no banco:', err));
-
-      // 3. Redirecionar para o Waze
-      if (wazeUrl) {
-        window.location.href = wazeUrl;
-      }
+        .then(() => {
+          adicionarGpsLog('Início da entrega gravado com sucesso. Atualizando listagem...');
+          return fetchEntregas();
+        })
+        .then(() => {
+          adicionarGpsLog('Listagem atualizada. Redirecionando para o Waze...');
+          if (wazeUrl) {
+            window.location.href = wazeUrl;
+          }
+        })
+        .catch((err) => {
+          adicionarGpsLog(`Erro ao registrar início no banco: ${err.message || err}. Redirecionando mesmo assim...`);
+          if (wazeUrl) {
+            window.location.href = wazeUrl;
+          }
+        });
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -2665,6 +2700,83 @@ export default function Entregas() {
         </div>
       )}
       
+      {/* Painel Flutuante de Debug de Logs do GPS */}
+      <div style={{
+        position: 'fixed',
+        bottom: '10px',
+        left: '10px',
+        zIndex: 99999,
+        fontFamily: 'monospace',
+        fontSize: '0.68rem',
+        maxWidth: '320px',
+        width: 'calc(100% - 20px)',
+        background: 'rgba(15, 23, 42, 0.95)',
+        color: '#10b981',
+        borderRadius: '8px',
+        boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
+        border: '1px solid #334155',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          padding: '8px 12px',
+          background: '#1e293b',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          cursor: 'pointer',
+          userSelect: 'none'
+        }} onClick={() => setShowDebugConsole(!showDebugConsole)}>
+          <span style={{ fontWeight: 700, color: '#f8fafc' }}>⚙️ GPS Debug Console</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm('Deseja limpar os logs locais do GPS?')) {
+                  localStorage.removeItem('gps_debug_logs');
+                  (window as any)._gpsLogs = [];
+                  setDebugLogs([]);
+                }
+              }}
+              style={{
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                padding: '1px 5px',
+                fontSize: '0.6rem',
+                cursor: 'pointer'
+              }}
+            >
+              Limpar
+            </button>
+            <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{showDebugConsole ? '▼' : '▲'}</span>
+          </div>
+        </div>
+        
+        {showDebugConsole && (
+          <div style={{
+            padding: '8px',
+            maxHeight: '140px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
+            borderTop: '1px solid #334155',
+            background: '#0f172a'
+          }}>
+            {debugLogs.length === 0 ? (
+              <span style={{ color: '#64748b', fontStyle: 'italic' }}>Nenhum log de rastreamento ainda.</span>
+            ) : (
+              debugLogs.map((log, idx) => (
+                <div key={idx} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', borderBottom: '1px solid #1e293b', paddingBottom: '2px' }}>
+                  {log}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Indicador de versão imperceptível no rodapé para controle do cache PWA */}
       <div style={{
         textAlign: 'center',
@@ -2677,7 +2789,7 @@ export default function Entregas() {
         userSelect: 'none',
         width: '100%'
       }}>
-        Versão: 1.1.2 - Atualizado em 17/07 15:00 (GPS Fix)
+        Versão: 1.1.3 - Atualizado em 17/07 15:15 (GPS Debug Panel)
       </div>
     </div>
   );
