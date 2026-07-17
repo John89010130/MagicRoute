@@ -997,140 +997,104 @@ export default function Entregas() {
       wazeUrl = `waze://?q=${encodeURIComponent(endereco)}&navigate=yes`;
     }
 
-    const executarInicio = () => {
-      // 1. Iniciar áudio silencioso diretamente no clique/gesto para garantir permissão de reprodução
-      try {
-        // Configurar AudioSession para playback no iOS
-        if ('audioSession' in navigator) {
-          try {
-            (navigator as any).audioSession.type = 'playback';
-            console.log('[GPS] AudioSession configurada para playback no clique.');
-          } catch (sessionErr) {
-            console.warn('[GPS] Erro ao configurar AudioSession.type:', sessionErr);
-          }
+    // 1. Iniciar áudio silencioso de fundo imediatamente no clique (necessário para registrar gesto de mídia)
+    let audio: HTMLAudioElement | null = null;
+    try {
+      if ('audioSession' in navigator) {
+        try {
+          (navigator as any).audioSession.type = 'playback';
+          console.log('[GPS] AudioSession configurada para playback no clique.');
+        } catch (sessionErr) {
+          console.warn('[GPS] Erro ao configurar AudioSession.type:', sessionErr);
         }
-
-        // Usar o mesmo WAV silencioso minimalista compatível
-        const audio = new Audio('data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA==');
-        audio.loop = true;
-        audio.play()
-          .then(() => {
-            (window as any)._gpsSilentAudio = audio;
-            console.log('[GPS] Áudio silencioso iniciado no clique do usuário.');
-            
-            // Configurar MediaSession para manter o SO ciente de que o player está ativo
-            if ('mediaSession' in navigator) {
-              navigator.mediaSession.metadata = new MediaMetadata({
-                title: 'Rastreamento de Rota Ativo',
-                artist: 'MagicRoute',
-                album: 'Em Transporte'
-              });
-            }
-          })
-          .catch((err) => console.warn('[GPS] Erro ao reproduzir áudio silencioso:', err));
-      } catch (audioErr) {
-        console.error('[GPS] Falha ao configurar áudio:', audioErr);
       }
 
-      // 2. Atualizar estado local instantaneamente para que a UI mostre 'Em Transporte'
-      setEntregas(prev => prev.map(ent => {
-        if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
-          return { ...ent, StatusEntrega: 'Em Transporte', SITUACAOENTREGA: 'Em Transporte' };
-        }
-        return ent;
-      }));
+      audio = new Audio('data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA==');
+      audio.loop = true;
+      audio.play()
+        .then(() => {
+          (window as any)._gpsSilentAudio = audio;
+          console.log('[GPS] Áudio silencioso iniciado no clique do usuário.');
+          
+          if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+              title: 'Rastreamento de Rota Ativo',
+              artist: 'MagicRoute',
+              album: 'Em Transporte'
+            });
+          }
+        })
+        .catch((err) => console.warn('[GPS] Erro ao reproduzir áudio silencioso:', err));
+    } catch (audioErr) {
+      console.error('[GPS] Falha ao configurar áudio:', audioErr);
+    }
 
-      // 3. Disparar início do rastreamento GPS no hook
-      window.dispatchEvent(new CustomEvent('iniciar-gps', {
-        detail: {
-          idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
-          idLote: String(idLote),
-          numeroPedido: String(entrega.NumeroPedido)
-        }
-      }));
+    if (!navigator.geolocation) {
+      alert('Seu navegador não suporta geolocalização.');
+      if (wazeUrl) window.location.href = wazeUrl;
+      return;
+    }
 
-      // 4. Registrar o evento no banco (assíncrono)
-      const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
-      gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave)
-        .then(() => fetchEntregas())
-        .catch((err) => console.error('Erro ao registrar início no banco:', err));
+    // 2. Aciona o popup real de permissão nativa de localização
+    console.log('[GPS] Solicitando permissão nativa de localização...');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log('[GPS] Localização capturada! Permissão concedida pelo usuário.');
 
-      // 5. Solicitar geolocalização rápida (força o popup de permissão se ainda não concedida)
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            console.log('[GPS] Localização obtida com sucesso. Redirecionando para o aplicativo do Waze...');
-            if (wazeUrl) {
-              window.location.href = wazeUrl;
-            }
-          },
-          (error) => {
-            console.warn('[GPS] Falha rápida na geolocalização (provavelmente pendente de aceitação ou já negada):', error);
-            // Redireciona de qualquer forma para não travar o motorista
-            if (wazeUrl) {
-              window.location.href = wazeUrl;
-            }
-          },
-          { enableHighAccuracy: false, timeout: 3000, maximumAge: Infinity }
-        );
-      } else {
+        // Atualizar estado local instantaneamente para que a UI mostre 'Em Transporte'
+        setEntregas(prev => prev.map(ent => {
+          if (String(ent.NumeroPedido) === String(entrega.NumeroPedido)) {
+            return { ...ent, StatusEntrega: 'Em Transporte', SITUACAOENTREGA: 'Em Transporte' };
+          }
+          return ent;
+        }));
+
+        // Disparar início do rastreamento GPS no hook
+        window.dispatchEvent(new CustomEvent('iniciar-gps', {
+          detail: {
+            idEmpresa: String(entrega.IDEmpresa || user.idEmpresa),
+            idLote: String(idLote),
+            numeroPedido: String(entrega.NumeroPedido)
+          }
+        }));
+
+        // Registrar o evento no banco (assíncrono)
+        const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
+        gravarEvento(user.codigo, user.codigo, 'InicioEntrega', chave)
+          .then(() => fetchEntregas())
+          .catch((err) => console.error('Erro ao registrar início no banco:', err));
+
+        // 3. Redirecionar para o Waze somente após o motorista ter aceito a permissão nativa
         if (wazeUrl) {
           window.location.href = wazeUrl;
         }
-      }
-    };
-
-    // Fluxo estruturado de confirmação de permissões para segundo plano (solicitado pelo usuário)
-    const iniciarFluxoComPermissao = async () => {
-      // 1. Pergunta sobre o GPS ativo no celular
-      const gpsAtivo = window.confirm(
-        "CONFIGURAÇÃO DO GPS:\n\n" +
-        "O GPS / Localização do seu celular está ativado nas configurações rápidas do aparelho?\n\n" +
-        "Clique em OK para confirmar que o GPS está ligado."
-      );
-      if (!gpsAtivo) return;
-
-      // 2. Pergunta sobre a permissão "Permitir o tempo todo" do navegador
-      const permissaoSempre = window.confirm(
-        "PERMISSÃO DE LOCALIZAÇÃO DO NAVEGADOR:\n\n" +
-        "Para que o sinal não pare quando você abrir o Waze, você configurou a Localização do seu navegador (Chrome/Safari) nas configurações do seu celular como 'PERMITIR O TEMPO TODO' ou 'SEMPRE PERMITIR'?\n\n" +
-        "Clique em OK para confirmar que configurou 'Permitir o tempo todo' no sistema."
-      );
-      if (!permissaoSempre) return;
-
-      // 3. Pergunta sobre manter a aba aberta
-      const manterAba = window.confirm(
-        "MANTER ABA ATIVA:\n\n" +
-        "Você manterá esta aba do navegador aberta em segundo plano (não fechará ela do gerenciador de apps)?\n\n" +
-        "Clique em OK para confirmar."
-      );
-      if (!manterAba) return;
-
-      // 4. Solicitação da permissão de geolocalização do navegador
-      if (navigator.permissions && navigator.permissions.query) {
-        try {
-          const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-          if (result.state === 'granted') {
-            executarInicio();
-          } else {
-            const aceitouGeo = window.confirm(
-              "AUTORIZAÇÃO DO NAVEGADOR:\n\n" +
-              "O navegador solicitará acesso à sua localização agora.\n\n" +
-              "Por favor, clique em OK e escolha 'Permitir/Sempre permitir' no balão de autorização do navegador que surgirá."
-            );
-            if (aceitouGeo) {
-              executarInicio();
-            }
-          }
-        } catch (e) {
-          executarInicio();
+      },
+      (error) => {
+        console.error('[GPS] Falha ao obter localização nativa:', error);
+        
+        // Parar o áudio iniciado se o usuário negar ou falhar
+        if (audio) {
+          try {
+            audio.pause();
+            (window as any)._gpsSilentAudio = null;
+          } catch (e) {}
         }
-      } else {
-        executarInicio();
-      }
-    };
 
-    iniciarFluxoComPermissao();
+        if (error.code === error.PERMISSION_DENIED) {
+          alert(
+            "Acesso à Localização Negado!\n\n" +
+            "Para iniciar o trajeto e abrir o Waze, você PRECISA permitir o acesso à localização na janela de permissão do celular."
+          );
+        } else {
+          alert("Não foi possível obter sua localização. Certifique-se de que o GPS do celular está ativo e tente novamente.");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 20000, // Dá 20 segundos para o motorista interagir com a caixinha nativa
+        maximumAge: 0
+      }
+    );
   };
 
   const handleCancelarInicio = async (entrega: any) => {
