@@ -1,4 +1,4 @@
-const CACHE_NAME = 'magicroute-v1.1.6';
+const CACHE_NAME = 'magicroute-v1.1.7';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
