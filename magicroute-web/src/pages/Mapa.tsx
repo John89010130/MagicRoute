@@ -63,10 +63,10 @@ export default function Mapa() {
   useEffect(() => {
     fetchEntregasAndGPS(false);
 
-    // Polling a cada 10 segundos
+    // Polling a cada 5 segundos
     const interval = setInterval(() => {
       fetchEntregasAndGPS(true);
-    }, 10000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [idLote, user]);
@@ -224,7 +224,20 @@ export default function Mapa() {
   const formatGpsTime = (dateStr: string) => {
     if (!dateStr) return 'N/A';
     try {
-      const date = new Date(dateStr);
+      let normalized = dateStr;
+      if (normalized.endsWith('Z')) {
+        // Se termina com Z mas representa o horário local de Brasília do banco de dados
+        normalized = normalized.slice(0, -1) + '-03:00';
+      } else if (!normalized.includes('-03:00') && !normalized.includes('+') && !normalized.includes('Z')) {
+        // Se for string simples, tratar explicitamente como Brasília
+        if (normalized.includes('T')) {
+          normalized = normalized + '-03:00';
+        } else {
+          normalized = normalized.replace(' ', 'T') + '-03:00';
+        }
+      }
+      
+      const date = new Date(normalized);
       if (isNaN(date.getTime())) return 'N/A';
       
       const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });

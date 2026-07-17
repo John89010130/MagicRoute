@@ -1080,27 +1080,57 @@ export default function Entregas() {
       }
     };
 
-    // Verificar se já possui permissão concedida
-    if (navigator.permissions && navigator.permissions.query) {
-      try {
-        const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-        if (result.state === 'granted') {
-          executarInicio();
-        } else {
-          const aceitou = window.confirm(
-            "Para acompanhar sua entrega rua a rua (mesmo com o Waze aberto), o navegador solicitará acesso à sua localização.\n\n" +
-            "Por favor, clique em 'OK' e escolha 'Permitir/Sempre permitir' na janela de autorização do navegador que será exibida."
-          );
-          if (aceitou) {
+    // Fluxo estruturado de confirmação de permissões para segundo plano (solicitado pelo usuário)
+    const iniciarFluxoComPermissao = async () => {
+      // 1. Pergunta sobre o GPS ativo no celular
+      const gpsAtivo = window.confirm(
+        "CONFIGURAÇÃO DO GPS:\n\n" +
+        "O GPS / Localização do seu celular está ativado nas configurações rápidas do aparelho?\n\n" +
+        "Clique em OK para confirmar que o GPS está ligado."
+      );
+      if (!gpsAtivo) return;
+
+      // 2. Pergunta sobre a permissão "Permitir o tempo todo" do navegador
+      const permissaoSempre = window.confirm(
+        "PERMISSÃO DE LOCALIZAÇÃO DO NAVEGADOR:\n\n" +
+        "Para que o sinal não pare quando você abrir o Waze, você configurou a Localização do seu navegador (Chrome/Safari) nas configurações do seu celular como 'PERMITIR O TEMPO TODO' ou 'SEMPRE PERMITIR'?\n\n" +
+        "Clique em OK para confirmar que configurou 'Permitir o tempo todo' no sistema."
+      );
+      if (!permissaoSempre) return;
+
+      // 3. Pergunta sobre manter a aba aberta
+      const manterAba = window.confirm(
+        "MANTER ABA ATIVA:\n\n" +
+        "Você manterá esta aba do navegador aberta em segundo plano (não fechará ela do gerenciador de apps)?\n\n" +
+        "Clique em OK para confirmar."
+      );
+      if (!manterAba) return;
+
+      // 4. Solicitação da permissão de geolocalização do navegador
+      if (navigator.permissions && navigator.permissions.query) {
+        try {
+          const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+          if (result.state === 'granted') {
             executarInicio();
+          } else {
+            const aceitouGeo = window.confirm(
+              "AUTORIZAÇÃO DO NAVEGADOR:\n\n" +
+              "O navegador solicitará acesso à sua localização agora.\n\n" +
+              "Por favor, clique em OK e escolha 'Permitir/Sempre permitir' no balão de autorização do navegador que surgirá."
+            );
+            if (aceitouGeo) {
+              executarInicio();
+            }
           }
+        } catch (e) {
+          executarInicio();
         }
-      } catch (e) {
+      } else {
         executarInicio();
       }
-    } else {
-      executarInicio();
-    }
+    };
+
+    iniciarFluxoComPermissao();
   };
 
   const handleCancelarInicio = async (entrega: any) => {
