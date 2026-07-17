@@ -11,8 +11,8 @@ export const adicionarGpsLog = (msg: string) => {
     win._gpsLogs = win._gpsLogs || [];
     win._gpsLogs.unshift(logMsg);
     
-    if (win._gpsLogs.length > 100) {
-      win._gpsLogs = win._gpsLogs.slice(0, 100);
+    if (win._gpsLogs.length > 150) {
+      win._gpsLogs = win._gpsLogs.slice(0, 150); // Aumentar limite para 150 para coletar mais detalhes
     }
     
     try {
@@ -32,7 +32,24 @@ export function useGpsTracker() {
 
   const startWatcher = (idEmpresa: string, idLote: string, numeroPedido: string) => {
     adicionarGpsLog(`Iniciando startWatcher para Pedido ${numeroPedido}...`);
+    adicionarGpsLog(`UA: ${navigator.userAgent}`);
     
+    // Logar bateria
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((battery: any) => {
+        adicionarGpsLog(`Bateria: ${(battery.level * 100).toFixed(0)}% | Carregando: ${battery.charging ? 'Sim' : 'Não'}`);
+      }).catch(() => {});
+    }
+
+    // Logar permissão de Geolocalização
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName })
+        .then((result) => {
+          adicionarGpsLog(`Permissão do Navegador: ${result.state}`);
+        })
+        .catch(() => {});
+    }
+
     // Limpar watcher e intervalo anterior se houver
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -100,8 +117,9 @@ export function useGpsTracker() {
     }
 
     // Função auxiliar para processar e gravar coordenadas com deduplicação inteligente
-    const processarPontoGPS = (latitude: number, longitude: number, accuracy?: number, origem: string = 'Watch') => {
-      adicionarGpsLog(`GPS Capturado (${origem}): Lat ${latitude}, Lng ${longitude}, Acc ${accuracy || 'N/A'}`);
+    const processarPontoGPS = (latitude: number, longitude: number, accuracy?: number, origem: string = 'Watch', speed: number | null = null) => {
+      const speedStr = speed !== null ? ` | Vel: ${speed.toFixed(1)}m/s` : '';
+      adicionarGpsLog(`GPS Capturado (${origem}): Lat ${latitude}, Lng ${longitude}, Acc ${accuracy || 'N/A'}m${speedStr}`);
       
       if (lastCoordsRef.current) {
         const { latitude: lastLat, longitude: lastLng, timestamp: lastTime } = lastCoordsRef.current;
@@ -123,18 +141,19 @@ export function useGpsTracker() {
       }
 
       lastCoordsRef.current = { latitude, longitude, timestamp: Date.now() };
-      adicionarGpsLog(`Gravando ponto no servidor para pedido ${numeroPedido}...`);
+      adicionarGpsLog(`Gravando ponto no servidor...`);
 
+      const tStart = Date.now();
       gravarPontoGPS(idEmpresa, idLote, numeroPedido, latitude, longitude, accuracy)
-        .then(() => adicionarGpsLog(`Ponto GPS gravado com sucesso! (Lat ${latitude}, Lng ${longitude})`))
-        .catch((e: any) => adicionarGpsLog(`Erro ao gravar ponto no servidor: ${e.message}`));
+        .then(() => adicionarGpsLog(`Sucesso no envio do ponto! Lat ${latitude}, Lng ${longitude} (Latência: ${Date.now() - tStart}ms)`))
+        .catch((e: any) => adicionarGpsLog(`Erro no envio: ${e.message}`));
     };
 
     // Gravar ponto inicial imediatamente
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        processarPontoGPS(latitude, longitude, accuracy, 'Inicial');
+        const { latitude, longitude, accuracy, speed } = position.coords;
+        processarPontoGPS(latitude, longitude, accuracy, 'Inicial', speed);
       },
       (err) => adicionarGpsLog(`Erro no ponto inicial GPS: ${err.message}`),
       { enableHighAccuracy: true, timeout: 5000 }
@@ -143,8 +162,8 @@ export function useGpsTracker() {
     // Iniciar watch
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        processarPontoGPS(latitude, longitude, accuracy, 'Watch');
+        const { latitude, longitude, accuracy, speed } = position.coords;
+        processarPontoGPS(latitude, longitude, accuracy, 'Watch', speed);
       },
       (error) => adicionarGpsLog(`Erro no watchPosition: ${error.message}`),
       {
@@ -159,8 +178,8 @@ export function useGpsTracker() {
       adicionarGpsLog('GPS Timer disparado (Segundo Plano)...');
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          processarPontoGPS(latitude, longitude, accuracy, 'Interval');
+          const { latitude, longitude, accuracy, speed } = position.coords;
+          processarPontoGPS(latitude, longitude, accuracy, 'Interval', speed);
         },
         (err) => adicionarGpsLog(`Erro no GPS do Timer: ${err.message}`),
         {

@@ -993,7 +993,41 @@ export default function Mapa() {
           userSelect: 'none'
         }} onClick={() => setShowDebugConsole(!showDebugConsole)}>
           <span style={{ fontWeight: 700, color: '#f8fafc' }}>⚙️ GPS Debug Console</span>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                const textToCopy = debugLogs.join('\n');
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(textToCopy)
+                    .then(() => alert('Logs copiados com sucesso!'))
+                    .catch((err) => alert('Erro ao copiar: ' + err));
+                } else {
+                  try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    alert('Logs copiados com sucesso! (Fallback)');
+                  } catch (err) {
+                    alert('Falha ao copiar automaticamente.');
+                  }
+                }
+              }}
+              style={{
+                background: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                padding: '1px 5px',
+                fontSize: '0.6rem',
+                cursor: 'pointer'
+              }}
+            >
+              Copiar
+            </button>
             <button 
               onClick={(e) => {
                 e.stopPropagation();
