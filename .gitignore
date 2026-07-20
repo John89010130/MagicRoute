@@ -11,3 +11,5 @@ dist/
 bin/
 obj/
 *.log
+*.apk
+
