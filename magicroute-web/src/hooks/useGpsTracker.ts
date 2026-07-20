@@ -1,5 +1,23 @@
 import { useEffect, useRef } from 'react';
 import { gravarPontoGPS } from '../services/api';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+interface BackgroundGeolocationPlugin {
+  addWatcher(
+    options: {
+      backgroundMessage?: string;
+      backgroundTitle?: string;
+      requestPermissions?: boolean;
+      stale?: boolean;
+      distanceFilter?: number;
+    },
+    callback: (position?: any, error?: any) => void
+  ): Promise<string>;
+  removeWatcher(options: { id: string }): Promise<void>;
+}
+
+const BackgroundGeolocation = registerPlugin<BackgroundGeolocationPlugin>('BackgroundGeolocation');
+
 
 export const adicionarGpsLog = (msg: string) => {
   const timestamp = new Date().toLocaleTimeString('pt-BR');
@@ -30,6 +48,64 @@ export function useGpsTracker() {
   const wakeLockRef = useRef<any | null>(null);
   const lastCoordsRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null);
   const timeUpdateListenerRef = useRef<(() => void) | null>(null);
+  const nativeWatcherIdRef = useRef<string | null>(null);
+
+
+  const idEmpresaRef = useRef<string>('');
+  const idLoteRef = useRef<string>('');
+  const numeroPedidoRef = useRef<string>('');
+
+  const processarPontoGPS = (latitude: number, longitude: number, accuracy?: number, origem: string = 'Watch', speed: number | null = null) => {
+    const speedStr = speed !== null ? ` | Vel: ${speed.toFixed(1)}m/s` : '';
+    adicionarGpsLog(`GPS Capturado (${origem}): Lat ${latitude}, Lng ${longitude}, Acc ${accuracy || 'N/A'}m${speedStr}`);
+    
+    if (lastCoordsRef.current) {
+      const { latitude: lastLat, longitude: lastLng, timestamp: lastTime } = lastCoordsRef.current;
+      const timeDiff = Date.now() - lastTime;
+
+      if (lastLat === latitude && lastLng === longitude) {
+        if (timeDiff < 60 * 1000) {
+          adicionarGpsLog('Ponto GPS ignorado: coordenadas idênticas há < 1 min.');
+          enviarFilaPendentes();
+          return;
+        }
+      } else {
+        const diffLat = Math.abs(lastLat - latitude);
+        const diffLng = Math.abs(lastLng - longitude);
+        if (diffLat < 0.0001 && diffLng < 0.0001 && timeDiff < 10 * 1000) {
+          adicionarGpsLog('Ponto GPS ignorado: deslocamento insignificante (< 10m) há < 10s.');
+          enviarFilaPendentes();
+          return;
+        }
+      }
+    }
+
+    lastCoordsRef.current = { latitude, longitude, timestamp: Date.now() };
+
+    // Adicionar novo ponto à fila offline no localStorage
+    const novoPonto = {
+      idEmpresa: idEmpresaRef.current,
+      idLote: idLoteRef.current,
+      numeroPedido: numeroPedidoRef.current,
+      latitude,
+      longitude,
+      accuracy,
+      timestamp: Date.now()
+    };
+    
+    let fila = [];
+    try {
+      const filaSalva = localStorage.getItem('gps_pending_queue');
+      fila = filaSalva ? JSON.parse(filaSalva) : [];
+    } catch (e) {
+      fila = [];
+    }
+    fila.push(novoPonto);
+    localStorage.setItem('gps_pending_queue', JSON.stringify(fila));
+    
+    // Iniciar processo de envio da fila
+    enviarFilaPendentes();
+  };
 
   const enviarFilaPendentes = async () => {
     const filaSalva = localStorage.getItem('gps_pending_queue');
@@ -78,10 +154,15 @@ export function useGpsTracker() {
     (window as any)._gpsSendingQueue = false;
   };
 
-  const startWatcher = (idEmpresa: string, idLote: string, numeroPedido: string) => {
+  const startWatcher = async (idEmpresa: string, idLote: string, numeroPedido: string) => {
     adicionarGpsLog(`Iniciando startWatcher para Pedido ${numeroPedido}...`);
     adicionarGpsLog(`UA: ${navigator.userAgent}`);
     
+    // Configurar os refs do lote ativo
+    idEmpresaRef.current = idEmpresa;
+    idLoteRef.current = idLote;
+    numeroPedidoRef.current = numeroPedido;
+
     // Logar bateria
     if ('getBattery' in navigator) {
       (navigator as any).getBattery().then((battery: any) => {
@@ -98,6 +179,15 @@ export function useGpsTracker() {
         .catch(() => {});
     }
 
+    // Limpar watcher nativo anterior se houver
+    if (nativeWatcherIdRef.current) {
+      try {
+        await BackgroundGeolocation.removeWatcher({ id: nativeWatcherIdRef.current });
+        adicionarGpsLog('Watcher nativo anterior removido.');
+      } catch (e) {}
+      nativeWatcherIdRef.current = null;
+    }
+
     // Limpar watcher e intervalo anterior se houver
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -110,6 +200,49 @@ export function useGpsTracker() {
       adicionarGpsLog('Intervalo de GPS anterior limpo.');
     }
 
+    // Se estiver em uma plataforma nativa (App Android instalado), use o plugin nativo de segundo plano
+    if (Capacitor.isNativePlatform()) {
+      adicionarGpsLog('Plataforma nativa detectada. Iniciando Geolocation via Foreground Service do Capacitor...');
+      try {
+        const watcherId = await BackgroundGeolocation.addWatcher(
+          {
+            backgroundTitle: 'Rastreamento MagicRoute Ativo',
+            backgroundMessage: 'Sua rota está em transporte e a localização está sendo transmitida.',
+            requestPermissions: true,
+            stale: false,
+            distanceFilter: 10 // Dispara a cada 10 metros
+          },
+          (location: any, error: any) => {
+            if (error) {
+              adicionarGpsLog(`[GPS Nativo] Erro no watcher: ${error.message || error}`);
+              return;
+            }
+            if (location) {
+              const { latitude, longitude, accuracy, speed } = location;
+              processarPontoGPS(latitude, longitude, accuracy, 'BackgroundPlugin', speed);
+            }
+          }
+        );
+        nativeWatcherIdRef.current = watcherId;
+        adicionarGpsLog(`[GPS Nativo] Watcher registrado com sucesso! ID: ${watcherId}`);
+        
+        // Também gravar ponto inicial nativo instantâneo para fins de feedback imediato
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude, accuracy, speed } = position.coords;
+            processarPontoGPS(latitude, longitude, accuracy, 'InicialNativa', speed);
+          },
+          (err) => adicionarGpsLog(`Erro no ponto inicial GPS nativo: ${err.message}`),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+        
+        return; // Retorna para pular o fluxo web fallback
+      } catch (err: any) {
+        adicionarGpsLog(`[GPS Nativo] Falha ao configurar watcher nativo: ${err.message || err}. Usando fallback web...`);
+      }
+    }
+
+    // Fluxo Web Fallback (Safari, Chrome Mobile, PWA)
     // Iniciar áudio silencioso em segundo plano para manter a aba ativa no mobile
     try {
       if ('audioSession' in navigator) {
@@ -200,59 +333,6 @@ export function useGpsTracker() {
       return;
     }
 
-    // Função auxiliar para processar e gravar coordenadas com deduplicação inteligente e fila offline
-    const processarPontoGPS = (latitude: number, longitude: number, accuracy?: number, origem: string = 'Watch', speed: number | null = null) => {
-      const speedStr = speed !== null ? ` | Vel: ${speed.toFixed(1)}m/s` : '';
-      adicionarGpsLog(`GPS Capturado (${origem}): Lat ${latitude}, Lng ${longitude}, Acc ${accuracy || 'N/A'}m${speedStr}`);
-      
-      if (lastCoordsRef.current) {
-        const { latitude: lastLat, longitude: lastLng, timestamp: lastTime } = lastCoordsRef.current;
-        const timeDiff = Date.now() - lastTime;
-
-        if (lastLat === latitude && lastLng === longitude) {
-          if (timeDiff < 60 * 1000) {
-            adicionarGpsLog('Ponto GPS ignorado: coordenadas idênticas há < 1 min.');
-            enviarFilaPendentes();
-            return;
-          }
-        } else {
-          const diffLat = Math.abs(lastLat - latitude);
-          const diffLng = Math.abs(lastLng - longitude);
-          if (diffLat < 0.0001 && diffLng < 0.0001 && timeDiff < 10 * 1000) {
-            adicionarGpsLog('Ponto GPS ignorado: deslocamento insignificante (< 10m) há < 10s.');
-            enviarFilaPendentes();
-            return;
-          }
-        }
-      }
-
-      lastCoordsRef.current = { latitude, longitude, timestamp: Date.now() };
-
-      // Adicionar novo ponto à fila offline no localStorage
-      const novoPonto = {
-        idEmpresa,
-        idLote,
-        numeroPedido,
-        latitude,
-        longitude,
-        accuracy,
-        timestamp: Date.now()
-      };
-      
-      let fila = [];
-      try {
-        const filaSalva = localStorage.getItem('gps_pending_queue');
-        fila = filaSalva ? JSON.parse(filaSalva) : [];
-      } catch (e) {
-        fila = [];
-      }
-      fila.push(novoPonto);
-      localStorage.setItem('gps_pending_queue', JSON.stringify(fila));
-      
-      // Iniciar processo de envio da fila
-      enviarFilaPendentes();
-    };
-
     // Gravar ponto inicial imediatamente
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -313,8 +393,20 @@ export function useGpsTracker() {
     intervalIdRef.current = setTimeout(rodarTimerGPS, 5000);
   };
 
-  const stopWatcher = () => {
+  const stopWatcher = async () => {
     adicionarGpsLog('Parando watch e interval...');
+    
+    // Parar watcher nativo se ativo
+    if (nativeWatcherIdRef.current) {
+      try {
+        await BackgroundGeolocation.removeWatcher({ id: nativeWatcherIdRef.current });
+        adicionarGpsLog('Watcher nativo removido com sucesso.');
+      } catch (e: any) {
+        adicionarGpsLog(`Erro ao remover watcher nativo: ${e.message}`);
+      }
+      nativeWatcherIdRef.current = null;
+    }
+
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;

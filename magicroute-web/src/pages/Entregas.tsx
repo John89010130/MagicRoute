@@ -875,6 +875,22 @@ export default function Entregas() {
     if (idLote && user) {
       fetchLoteLogs();
     }
+
+    const handleFocus = () => {
+      console.log('[Entregas] App ganhou foco/visibilidade. Atualizando entregas e logs...');
+      fetchEntregas();
+      if (idLote && user) {
+        fetchLoteLogs();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
   }, [idLote, user, activeTab]);
 
   useEffect(() => {

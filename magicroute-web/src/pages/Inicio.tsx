@@ -32,6 +32,19 @@ export default function Inicio() {
 
   useEffect(() => {
     fetchLotes();
+
+    const handleFocus = () => {
+      console.log('[Inicio] App ganhou foco/visibilidade. Atualizando lotes...');
+      fetchLotes();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
   }, [user]);
 
   const handleLoteClick = (lote: any) => {
