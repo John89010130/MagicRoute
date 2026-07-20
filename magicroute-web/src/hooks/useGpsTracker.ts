@@ -29,6 +29,7 @@ export function useGpsTracker() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<any | null>(null);
   const lastCoordsRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null);
+  const timeUpdateListenerRef = useRef<(() => void) | null>(null);
 
   const enviarFilaPendentes = async () => {
     const filaSalva = localStorage.getItem('gps_pending_queue');
@@ -141,6 +142,42 @@ export function useGpsTracker() {
       }
     } catch (audioErr: any) {
       adicionarGpsLog(`Erro ao configurar áudio silencioso: ${audioErr.message}`);
+    }
+
+    // Configurar heartbeat de áudio silencioso para evitar suspensão de timers no background
+    if (audioRef.current) {
+      if (timeUpdateListenerRef.current) {
+        try {
+          audioRef.current.removeEventListener('timeupdate', timeUpdateListenerRef.current);
+        } catch (e) {}
+      }
+
+      let lastHeartbeatTime = 0;
+      const handleTimeUpdate = () => {
+        const now = Date.now();
+        // Disparar a cada 10 segundos
+        if (now - lastHeartbeatTime >= 10000) {
+          lastHeartbeatTime = now;
+          adicionarGpsLog('GPS Heartbeat disparado (Via Evento de Áudio)...');
+          
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const { latitude, longitude, accuracy, speed } = position.coords;
+              processarPontoGPS(latitude, longitude, accuracy, 'Heartbeat', speed);
+            },
+            (err) => adicionarGpsLog(`Erro no GPS do Heartbeat: ${err.message}`),
+            {
+              enableHighAccuracy: false,
+              maximumAge: 15000,
+              timeout: 8000
+            }
+          );
+        }
+      };
+
+      timeUpdateListenerRef.current = handleTimeUpdate;
+      audioRef.current.addEventListener('timeupdate', handleTimeUpdate);
+      adicionarGpsLog('Listener de timeupdate registrado no áudio silencioso.');
     }
 
     // Iniciar Screen Wake Lock (impedir tela de apagar)
@@ -302,6 +339,13 @@ export function useGpsTracker() {
     }
     
     if (audioRef.current) {
+      if (timeUpdateListenerRef.current) {
+        try {
+          audioRef.current.removeEventListener('timeupdate', timeUpdateListenerRef.current);
+          timeUpdateListenerRef.current = null;
+          adicionarGpsLog('Listener de timeupdate do áudio removido.');
+        } catch (e) {}
+      }
       try {
         audioRef.current.pause();
         audioRef.current = null;
