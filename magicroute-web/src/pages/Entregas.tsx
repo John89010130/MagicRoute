@@ -1011,12 +1011,12 @@ export default function Entregas() {
     const lng = entrega.LongitudeEntrega || entrega.LONGITUDE;
     const endereco = entrega.EnderecoEntrega || entrega.ENDERECO || '';
     
-    // Usar esquema nativo waze:// para abrir o aplicativo instalado diretamente
+    // Usar link universal do Waze para evitar bloqueio de redirecionamento no Android Chrome e manter o PWA rodando
     let wazeUrl = '';
     if (lat && lng && lat !== '0' && lng !== '0') {
-      wazeUrl = `waze://?ll=${lat},${lng}&navigate=yes`;
+      wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
     } else if (endereco) {
-      wazeUrl = `waze://?q=${encodeURIComponent(endereco)}&navigate=yes`;
+      wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(endereco)}&navigate=yes`;
     }
 
     // 1. Iniciar áudio silencioso de fundo imediatamente no clique (necessário para registrar gesto de mídia)
@@ -1053,7 +1053,7 @@ export default function Entregas() {
 
     if (!navigator.geolocation) {
       alert('Seu navegador não suporta geolocalização.');
-      if (wazeUrl) window.location.href = wazeUrl;
+      if (wazeUrl) window.open(wazeUrl, '_blank');
       return;
     }
 
@@ -1093,13 +1093,13 @@ export default function Entregas() {
         .then(() => {
           adicionarGpsLog('Listagem atualizada. Redirecionando para o Waze...');
           if (wazeUrl) {
-            window.location.href = wazeUrl;
+            window.open(wazeUrl, '_blank');
           }
         })
         .catch((err) => {
           adicionarGpsLog(`Erro ao registrar início no banco: ${err.message || err}. Redirecionando mesmo assim...`);
           if (wazeUrl) {
-            window.location.href = wazeUrl;
+            window.open(wazeUrl, '_blank');
           }
         });
     };
@@ -2331,7 +2331,7 @@ export default function Entregas() {
             {entregas.map((entrega, index) => {
               const statusLower = (entrega.StatusEntrega || entrega.SITUACAOENTREGA || '').toLowerCase();
               const isEntregue = statusLower.includes('entregue') || statusLower.includes('concluido') || statusLower.includes('concluído');
-              const isEmTransporte = statusLower.includes('transporte');
+              const isEmTransporte = statusLower.includes('transporte') || statusLower.includes('progresso');
 
               return (
                 <div

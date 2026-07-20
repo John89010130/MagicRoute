@@ -30,6 +30,53 @@ export function useGpsTracker() {
   const wakeLockRef = useRef<any | null>(null);
   const lastCoordsRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null);
 
+  const enviarFilaPendentes = async () => {
+    const filaSalva = localStorage.getItem('gps_pending_queue');
+    if (!filaSalva) return;
+    
+    let fila = [];
+    try {
+      fila = JSON.parse(filaSalva);
+    } catch (e) {
+      localStorage.removeItem('gps_pending_queue');
+      return;
+    }
+    
+    if (fila.length === 0) return;
+    
+    // Evitar envios concorrentes da fila
+    if ((window as any)._gpsSendingQueue) return;
+    (window as any)._gpsSendingQueue = true;
+    
+    adicionarGpsLog(`[Fila] Sincronizando ${fila.length} pontos pendentes...`);
+    
+    const pontosRestantes = [...fila];
+    
+    while (pontosRestantes.length > 0) {
+      const ponto = pontosRestantes[0];
+      const tStart = Date.now();
+      try {
+        await gravarPontoGPS(
+          ponto.idEmpresa,
+          ponto.idLote,
+          ponto.numeroPedido,
+          ponto.latitude,
+          ponto.longitude,
+          ponto.accuracy
+        );
+        // Sucesso! Remover da fila
+        pontosRestantes.shift();
+        adicionarGpsLog(`[Fila] Sucesso no envio! Lat ${ponto.latitude}, Lng ${ponto.longitude} (Latência: ${Date.now() - tStart}ms)`);
+      } catch (err: any) {
+        adicionarGpsLog(`[Fila] Erro ao enviar ponto: ${err.message || err}. Suspendendo sincronização.`);
+        break; // Se falhar (por exemplo, sem rede), para o loop
+      }
+    }
+    
+    localStorage.setItem('gps_pending_queue', JSON.stringify(pontosRestantes));
+    (window as any)._gpsSendingQueue = false;
+  };
+
   const startWatcher = (idEmpresa: string, idLote: string, numeroPedido: string) => {
     adicionarGpsLog(`Iniciando startWatcher para Pedido ${numeroPedido}...`);
     adicionarGpsLog(`UA: ${navigator.userAgent}`);
@@ -57,7 +104,7 @@ export function useGpsTracker() {
       adicionarGpsLog('Watcher de GPS anterior limpo.');
     }
     if (intervalIdRef.current !== null) {
-      clearInterval(intervalIdRef.current);
+      clearTimeout(intervalIdRef.current);
       intervalIdRef.current = null;
       adicionarGpsLog('Intervalo de GPS anterior limpo.');
     }
@@ -116,7 +163,7 @@ export function useGpsTracker() {
       return;
     }
 
-    // Função auxiliar para processar e gravar coordenadas com deduplicação inteligente
+    // Função auxiliar para processar e gravar coordenadas com deduplicação inteligente e fila offline
     const processarPontoGPS = (latitude: number, longitude: number, accuracy?: number, origem: string = 'Watch', speed: number | null = null) => {
       const speedStr = speed !== null ? ` | Vel: ${speed.toFixed(1)}m/s` : '';
       adicionarGpsLog(`GPS Capturado (${origem}): Lat ${latitude}, Lng ${longitude}, Acc ${accuracy || 'N/A'}m${speedStr}`);
@@ -128,6 +175,7 @@ export function useGpsTracker() {
         if (lastLat === latitude && lastLng === longitude) {
           if (timeDiff < 60 * 1000) {
             adicionarGpsLog('Ponto GPS ignorado: coordenadas idênticas há < 1 min.');
+            enviarFilaPendentes();
             return;
           }
         } else {
@@ -135,18 +183,37 @@ export function useGpsTracker() {
           const diffLng = Math.abs(lastLng - longitude);
           if (diffLat < 0.0001 && diffLng < 0.0001 && timeDiff < 10 * 1000) {
             adicionarGpsLog('Ponto GPS ignorado: deslocamento insignificante (< 10m) há < 10s.');
+            enviarFilaPendentes();
             return;
           }
         }
       }
 
       lastCoordsRef.current = { latitude, longitude, timestamp: Date.now() };
-      adicionarGpsLog(`Gravando ponto no servidor...`);
 
-      const tStart = Date.now();
-      gravarPontoGPS(idEmpresa, idLote, numeroPedido, latitude, longitude, accuracy)
-        .then(() => adicionarGpsLog(`Sucesso no envio do ponto! Lat ${latitude}, Lng ${longitude} (Latência: ${Date.now() - tStart}ms)`))
-        .catch((e: any) => adicionarGpsLog(`Erro no envio: ${e.message}`));
+      // Adicionar novo ponto à fila offline no localStorage
+      const novoPonto = {
+        idEmpresa,
+        idLote,
+        numeroPedido,
+        latitude,
+        longitude,
+        accuracy,
+        timestamp: Date.now()
+      };
+      
+      let fila = [];
+      try {
+        const filaSalva = localStorage.getItem('gps_pending_queue');
+        fila = filaSalva ? JSON.parse(filaSalva) : [];
+      } catch (e) {
+        fila = [];
+      }
+      fila.push(novoPonto);
+      localStorage.setItem('gps_pending_queue', JSON.stringify(fila));
+      
+      // Iniciar processo de envio da fila
+      enviarFilaPendentes();
     };
 
     // Gravar ponto inicial imediatamente
@@ -173,22 +240,40 @@ export function useGpsTracker() {
       }
     );
 
-    // Iniciar timer de backup para segundo plano (a cada 5 segundos)
-    intervalIdRef.current = setInterval(() => {
+    // Iniciar timer recursivo (setTimeout) de backup para segundo plano para evitar acúmulos e timeouts
+    const rodarTimerGPS = () => {
+      if (intervalIdRef.current === null) {
+        adicionarGpsLog('Timer de GPS cancelado ou parado.');
+        return;
+      }
+      
       adicionarGpsLog('GPS Timer disparado (Segundo Plano)...');
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude, accuracy, speed } = position.coords;
           processarPontoGPS(latitude, longitude, accuracy, 'Interval', speed);
+          
+          if (intervalIdRef.current !== null) {
+            intervalIdRef.current = setTimeout(rodarTimerGPS, 10000);
+          }
         },
-        (err) => adicionarGpsLog(`Erro no GPS do Timer: ${err.message}`),
+        (err) => {
+          adicionarGpsLog(`Erro no GPS do Timer: ${err.message}`);
+          
+          if (intervalIdRef.current !== null) {
+            intervalIdRef.current = setTimeout(rodarTimerGPS, 10000);
+          }
+        },
         {
-          enableHighAccuracy: false, // Usar baixa precisão no background para evitar o bloqueio de hardware do iOS/Safari
+          enableHighAccuracy: false, // Usar baixa precisão no background para economizar bateria e hardware
           maximumAge: 15000, // Aceitar posições em cache de até 15 segundos
-          timeout: 4000 // Timeout menor para evitar acumular requisições pendentes
+          timeout: 8000 // Timeout de 8s para dar mais estabilidade em segundo plano
         }
       );
-    }, 5000);
+    };
+
+    // Iniciar o timeout recursivo
+    intervalIdRef.current = setTimeout(rodarTimerGPS, 5000);
   };
 
   const stopWatcher = () => {
@@ -199,7 +284,7 @@ export function useGpsTracker() {
     }
 
     if (intervalIdRef.current !== null) {
-      clearInterval(intervalIdRef.current);
+      clearTimeout(intervalIdRef.current);
       intervalIdRef.current = null;
     }
 
@@ -286,6 +371,8 @@ export function useGpsTracker() {
             })
             .catch((err: any) => adicionarGpsLog(`Erro ao reativar Wake Lock: ${err.message}`));
         }
+        // Sincronizar fila local ao retornar visibilidade
+        enviarFilaPendentes();
       } else if (document.visibilityState === 'hidden') {
         adicionarGpsLog('Página oculta (minimizado/segundo plano).');
       }
