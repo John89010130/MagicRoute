@@ -6,10 +6,10 @@
 
 :root {
   /* Cores primárias */
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-light: #e0e7ff;
-  --primary-dark: #3730a3;
+  --primary: #8c2cf5;
+  --primary-hover: #731bc2;
+  --primary-light: rgba(140, 44, 245, 0.08);
+  --primary-dark: #6e1ac9;
 
   /* Cores de acento */
   --accent: #06b6d4;
@@ -25,36 +25,36 @@
   --info: #3b82f6;
   --info-light: #dbeafe;
 
-  /* Neutros */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --bg-card: #1e293b;
-  --bg-input: #334155;
-  --surface: #ffffff08;
-  --border: #334155;
-  --border-light: #475569;
+  /* Neutros - Light Mode */
+  --bg-primary: #f8f9fe;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f3f5;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --surface: rgba(0, 0, 0, 0.04);
+  --border: #eaeaea;
+  --border-light: #f1f3f5;
 
-  /* Texto */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --text-inverse: #0f172a;
+  /* Texto - Light Mode */
+  --text-primary: #1a1d20;
+  --text-secondary: #495057;
+  --text-tertiary: #868e96;
+  --text-inverse: #ffffff;
 
   /* Gradientes */
-  --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --gradient-primary: linear-gradient(135deg, #8c2cf5 0%, #6e1ac9 100%);
   --gradient-accent: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
   --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
   --gradient-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  --gradient-bg: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-  --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+  --gradient-bg: linear-gradient(180deg, #f8f9fe 0%, #f1f3f5 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.6));
 
   /* Sombras */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  --shadow-glow: 0 0 20px rgba(140, 44, 245, 0.15);
 
   /* Bordas */
   --radius-sm: 8px;
@@ -70,6 +70,172 @@
 
   /* Fontes */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Dark Mode overrides */
+.dark {
+  /* Neutros - Dark Mode */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-card: #1e293b;
+  --bg-input: #334155;
+  --surface: rgba(255, 255, 255, 0.08);
+  --border: #334155;
+  --border-light: #475569;
+
+  /* Texto - Dark Mode */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-inverse: #0f172a;
+
+  --gradient-bg: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(140, 44, 245, 0.3);
+  
+  --primary-light: rgba(140, 44, 245, 0.15);
+}
+
+/* Global overrides to make pages look premium in Dark Mode without editing all components */
+.dark body {
+  background: var(--gradient-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Dashboard Container, Main Content background */
+.dark .dashboard-container,
+.dark .main-content,
+.dark .app-layout {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Overriding white / light gray backgrounds of custom card/table elements in all pages */
+.dark .dashboard-card,
+.dark div[style*="background: #ffffff"],
+.dark div[style*="background:#ffffff"],
+.dark div[style*="background-color: #ffffff"],
+.dark div[style*="background-color:#ffffff"],
+.dark div[style*="background: rgb(255, 255, 255)"],
+.dark div[style*="background-color: rgb(255, 255, 255)"],
+.dark div[style*="background: #fff"],
+.dark div[style*="background:#fff"],
+.dark div[style*="background-color: #fff"],
+.dark div[style*="background-color:#fff"] {
+  background-color: var(--bg-card) !important;
+  background-image: none !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark div[style*="background: #f8f9fa"],
+.dark div[style*="background:#f8f9fa"],
+.dark div[style*="background-color: #f8f9fa"],
+.dark div[style*="background-color:#f8f9fa"],
+.dark div[style*="background: #f8f9fe"],
+.dark div[style*="background:#f8f9fe"],
+.dark div[style*="background-color: #f8f9fe"],
+.dark div[style*="background-color:#f8f9fe"],
+.dark div[style*="background: #f8fafc"],
+.dark div[style*="background:#f8fafc"],
+.dark div[style*="background-color: #f8fafc"],
+.dark div[style*="background-color:#f8fafc"] {
+  background-color: var(--bg-primary) !important;
+  border-color: var(--border) !important;
+}
+
+/* Overriding border-colors */
+.dark div[style*="border: 1px solid #e9ecef"],
+.dark div[style*="border:1px solid #e9ecef"],
+.dark div[style*="border: 1px solid #eaeaea"],
+.dark div[style*="border:1px solid #eaeaea"],
+.dark div[style*="border: 1.5px solid #eaeaea"],
+.dark div[style*="border:1.5px solid #eaeaea"],
+.dark div[style*="border: 1px solid #e2e8f0"],
+.dark div[style*="border:1px solid #e2e8f0"],
+.dark div[style*="border: 1.5px solid #e2e8f0"],
+.dark div[style*="border:1.5px solid #e2e8f0"] {
+  border-color: var(--border) !important;
+}
+
+/* Table header/row styles in Dark Mode */
+.dark table,
+.dark tr,
+.dark th,
+.dark td {
+  border-color: var(--border) !important;
+}
+
+.dark th {
+  color: var(--text-secondary) !important;
+}
+
+.dark td {
+  color: var(--text-primary) !important;
+}
+
+.dark tr[style*="background: #f8f9fa"],
+.dark tr[style*="background:#f8f9fa"] {
+  background-color: var(--bg-primary) !important;
+}
+
+.dark tr:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* Overriding headings, labels, texts */
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: var(--text-primary) !important;
+}
+
+.dark p,
+.dark span,
+.dark label {
+  color: var(--text-primary);
+}
+
+.dark p[style*="color: #6c757d"],
+.dark p[style*="color:#6c757d"],
+.dark p[style*="color: #868e96"],
+.dark p[style*="color:#868e96"],
+.dark span[style*="color: #868e96"],
+.dark span[style*="color:#868e96"],
+.dark span[style*="color: #6c757d"],
+.dark span[style*="color:#6c757d"],
+.dark label[style*="color: #6c757d"],
+.dark label[style*="color:#6c757d"],
+.dark label[style*="color: #495057"],
+.dark label[style*="color:#495057"] {
+  color: var(--text-secondary) !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-tertiary) !important;
+}
+
+/* Recharts Pie cells fill overrides */
+.dark .recharts-pie-sector path[fill="#e9ecef"] {
+  fill: var(--bg-tertiary) !important;
 }
 
 /* ==========================================

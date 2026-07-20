@@ -29,6 +29,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('magicroute_theme') as 'light' | 'dark') || 'light';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('magicroute_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('magicroute_theme', 'light');
+    }
+  }, [theme]);
 
   const fetchNotifications = async () => {
     if (!user) return;
@@ -149,12 +162,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // 2. LAYOUT DESKTOP (Administrador) - Painel completo das imagens 4 e 5
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8f9fa', color: '#333' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       {/* Sidebar Cinza Claro */}
       <aside style={{
         width: '260px',
-        background: '#ffffff',
-        borderRight: '1px solid #e9ecef',
+        background: 'var(--bg-secondary)',
+        borderRight: '1px solid var(--border)',
         padding: '24px 16px',
         display: 'flex',
         flexDirection: 'column',
@@ -178,12 +191,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           }}>
             <RouteIcon size={20} color="white" />
           </div>
-          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#333' }}>Magic Route</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>Magic Route</span>
         </div>
 
         {/* Links de Navegação */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#adb5bd', padding: '0 16px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', padding: '0 16px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
             Platform Navigation
           </p>
 
@@ -212,7 +225,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             Locais / Unidades
           </NavLink>
 
-          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#adb5bd', padding: '0 16px', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '16px', marginBottom: '8px' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', padding: '0 16px', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '16px', marginBottom: '8px' }}>
             Settings
           </p>
 
@@ -278,15 +291,51 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={{
             display: 'flex',
-            background: '#f1f3f5',
+            background: 'var(--bg-tertiary)',
             padding: '4px',
             borderRadius: '8px',
             gap: '4px',
           }}>
-            <button style={{ flex: 1, border: 'none', background: '#ffffff', borderRadius: '6px', padding: '6px 0', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <button 
+              onClick={() => setTheme('light')}
+              style={{ 
+                flex: 1, 
+                border: 'none', 
+                background: theme === 'light' ? 'var(--bg-secondary)' : 'transparent', 
+                borderRadius: '6px', 
+                padding: '6px 0', 
+                fontSize: '0.75rem', 
+                fontWeight: 600, 
+                color: theme === 'light' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: '6px', 
+                boxShadow: theme === 'light' ? '0 1px 3px rgba(0,0,0,0.05)' : 'none',
+                cursor: 'pointer'
+              }}
+            >
               <Sun size={14} /> Light Mode
             </button>
-            <button style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: '6px', padding: '6px 0', fontSize: '0.75rem', color: '#495057', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+            <button 
+              onClick={() => setTheme('dark')}
+              style={{ 
+                flex: 1, 
+                border: 'none', 
+                background: theme === 'dark' ? 'var(--bg-secondary)' : 'transparent', 
+                borderRadius: '6px', 
+                padding: '6px 0', 
+                fontSize: '0.75rem', 
+                fontWeight: 600, 
+                color: theme === 'dark' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: '6px', 
+                boxShadow: theme === 'dark' ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
+                cursor: 'pointer'
+              }}
+            >
               <Moon size={14} /> Dark Mode
             </button>
           </div>
@@ -310,8 +359,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {/* Profile Badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: '#333' }}>John E.</p>
-              <p style={{ fontSize: '0.75rem', color: '#868e96', margin: 0 }}>admin@gmail.com</p>
+              <p style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>John E.</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>admin@gmail.com</p>
             </div>
             <div style={{
               width: '40px',
@@ -343,19 +392,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           gap: 12px;
           padding: 10px 16px;
           border-radius: 8px;
-          color: #495057;
+          color: var(--text-secondary);
           font-weight: 500;
           font-size: 0.9rem;
           text-decoration: none;
           transition: all 0.2s ease;
         }
         .nav-link-adm:hover {
-          background: #f1f3f5;
-          color: #212529;
+          background: var(--bg-tertiary);
+          color: var(--text-primary);
         }
         .nav-link-adm.active {
-          background: #f3f0ff;
-          color: #8c2cf5;
+          background: var(--primary-light);
+          color: var(--primary);
           font-weight: 600;
         }
       `}</style>
@@ -367,7 +416,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           right: 0,
           bottom: 0,
           width: '380px',
-          background: '#ffffff',
+          background: 'var(--bg-secondary)',
           boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
           zIndex: 100,
           display: 'flex',
@@ -377,21 +426,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {/* Header do Drawer */}
           <div style={{
             padding: '20px 24px',
-            borderBottom: '1px solid #e9ecef',
+            borderBottom: '1px solid var(--border)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: '#f8f9fa'
+            background: 'var(--bg-primary)'
           }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#333' }}>Notificações</h3>
-              <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#868e96' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Notificações</h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                 {notifications.length} novas atualizações
               </p>
             </div>
             <button 
               onClick={() => setShowNotifications(false)}
-              style={{ background: 'none', border: 'none', color: '#495057', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
             >
               <X size={20} />
             </button>
@@ -400,7 +449,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {/* Lista de Notificações */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
             {notifications.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#868e96', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)', gap: '12px' }}>
                 <Bell size={48} style={{ opacity: 0.25 }} />
                 <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600 }}>Tudo limpo por aqui!</p>
                 <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8 }}>Sem notificações pendentes.</p>
@@ -411,21 +460,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <div key={index} style={{
                     padding: '14px',
                     borderRadius: '8px',
-                    background: '#f8f9fe',
+                    background: 'var(--bg-tertiary)',
                     borderLeft: '4px solid #8c2cf5',
                     fontSize: '0.82rem',
                     lineHeight: '1.4',
                     boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <strong style={{ color: '#495057' }}>{notif.Usuario}</strong>
-                      <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>{notif.Usuario}</strong>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
                         {new Date(notif.DataCriacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p style={{ margin: 0, color: '#333' }}>{notif.Descricao}</p>
+                    <p style={{ margin: 0, color: 'var(--text-primary)' }}>{notif.Descricao}</p>
                     {notif.IDLote && (
-                      <span style={{ display: 'inline-block', marginTop: '6px', background: '#f3f0ff', color: '#8c2cf5', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px' }}>
+                      <span style={{ display: 'inline-block', marginTop: '6px', background: 'var(--primary-light)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px' }}>
                         Lote #{notif.IDLote}
                       </span>
                     )}
@@ -439,10 +488,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {notifications.length > 0 && (
             <div style={{
               padding: '16px 20px',
-              borderTop: '1px solid #e9ecef',
+              borderTop: '1px solid var(--border)',
               display: 'flex',
               justifyContent: 'center',
-              background: '#f8f9fa'
+              background: 'var(--bg-primary)'
             }}>
               <button
                 onClick={handleMarkAllAsRead}
