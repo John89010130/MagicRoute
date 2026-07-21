@@ -18,7 +18,6 @@ interface BackgroundGeolocationPlugin {
 
 const BackgroundGeolocation = registerPlugin<BackgroundGeolocationPlugin>('BackgroundGeolocation');
 
-
 export const adicionarGpsLog = (msg: string) => {
   const timestamp = new Date().toLocaleTimeString('pt-BR');
   const logMsg = `[${timestamp}] ${msg}`;
@@ -30,7 +29,7 @@ export const adicionarGpsLog = (msg: string) => {
     win._gpsLogs.unshift(logMsg);
     
     if (win._gpsLogs.length > 150) {
-      win._gpsLogs = win._gpsLogs.slice(0, 150); // Aumentar limite para 150 para coletar mais detalhes
+      win._gpsLogs = win._gpsLogs.slice(0, 150);
     }
     
     try {
@@ -44,18 +43,90 @@ export const adicionarGpsLog = (msg: string) => {
 export function useGpsTracker() {
   const watchIdRef = useRef<number | null>(null);
   const intervalIdRef = useRef<any | null>(null);
+  const nativeIntervalIdRef = useRef<any | null>(null); // timer de fallback para modo nativo
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<any | null>(null);
   const lastCoordsRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null);
   const timeUpdateListenerRef = useRef<(() => void) | null>(null);
   const nativeWatcherIdRef = useRef<string | null>(null);
 
-
   const idEmpresaRef = useRef<string>('');
   const idLoteRef = useRef<string>('');
   const numeroPedidoRef = useRef<string>('');
 
-  const processarPontoGPS = (latitude: number, longitude: number, accuracy?: number, origem: string = 'Watch', speed: number | null = null) => {
+  // ─── Envio da fila com try/finally para nunca travar ───────────────────────
+  const enviarFilaPendentes = async () => {
+    const filaSalva = localStorage.getItem('gps_pending_queue');
+    if (!filaSalva) return;
+    
+    let fila: any[] = [];
+    try {
+      fila = JSON.parse(filaSalva);
+    } catch (e) {
+      localStorage.removeItem('gps_pending_queue');
+      return;
+    }
+    
+    if (fila.length === 0) return;
+    
+    // Evitar envios concorrentes da fila — mas SEMPRE garantir liberação no finally
+    if ((window as any)._gpsSendingQueue) return;
+    (window as any)._gpsSendingQueue = true;
+    
+    adicionarGpsLog(`[Fila] Sincronizando ${fila.length} pontos pendentes...`);
+    
+    const pontosRestantes = [...fila];
+    
+    try {
+      while (pontosRestantes.length > 0) {
+        const ponto = pontosRestantes[0];
+        const tStart = Date.now();
+        let retries = 0;
+        let enviado = false;
+        
+        // Tenta até 3 vezes com backoff exponencial
+        while (retries < 3 && !enviado) {
+          try {
+            await gravarPontoGPS(
+              ponto.idEmpresa,
+              ponto.idLote,
+              ponto.numeroPedido,
+              ponto.latitude,
+              ponto.longitude,
+              ponto.accuracy
+            );
+            enviado = true;
+            pontosRestantes.shift();
+            adicionarGpsLog(`[Fila] ✓ Enviado! Lat ${ponto.latitude}, Lng ${ponto.longitude} (${Date.now() - tStart}ms, tentativa ${retries + 1})`);
+          } catch (err: any) {
+            retries++;
+            if (retries < 3) {
+              adicionarGpsLog(`[Fila] Tentativa ${retries} falhou: ${err.message}. Aguardando ${retries * 2}s...`);
+              await new Promise(resolve => setTimeout(resolve, retries * 2000));
+            } else {
+              adicionarGpsLog(`[Fila] ✗ Ponto falhou após 3 tentativas: ${err.message}. Suspendendo fila.`);
+              break;
+            }
+          }
+        }
+        
+        if (!enviado) break; // Para o loop se esgotou retentativas
+      }
+    } finally {
+      // CRÍTICO: sempre libera a flag, mesmo que uma exceção inesperada ocorra
+      localStorage.setItem('gps_pending_queue', JSON.stringify(pontosRestantes));
+      (window as any)._gpsSendingQueue = false;
+    }
+  };
+
+  // ─── Processamento e deduplicação de ponto GPS ─────────────────────────────
+  const processarPontoGPS = (
+    latitude: number,
+    longitude: number,
+    accuracy?: number,
+    origem: string = 'Watch',
+    speed: number | null = null
+  ) => {
     const speedStr = speed !== null ? ` | Vel: ${speed.toFixed(1)}m/s` : '';
     adicionarGpsLog(`GPS Capturado (${origem}): Lat ${latitude}, Lng ${longitude}, Acc ${accuracy || 'N/A'}m${speedStr}`);
     
@@ -64,16 +135,18 @@ export function useGpsTracker() {
       const timeDiff = Date.now() - lastTime;
 
       if (lastLat === latitude && lastLng === longitude) {
-        if (timeDiff < 60 * 1000) {
-          adicionarGpsLog('Ponto GPS ignorado: coordenadas idênticas há < 1 min.');
-          enviarFilaPendentes();
+        // Coordenadas exatamente idênticas: aguarda só 30s (não 60s) antes de forçar envio
+        if (timeDiff < 30 * 1000) {
+          adicionarGpsLog('Ponto GPS ignorado: coordenadas idênticas há < 30s. Tentando fila...');
+          enviarFilaPendentes(); // Tenta esvaziar fila mesmo sem novo ponto
           return;
         }
       } else {
         const diffLat = Math.abs(lastLat - latitude);
         const diffLng = Math.abs(lastLng - longitude);
+        // Deslocamento insignificante (< ~10m) em menos de 10s
         if (diffLat < 0.0001 && diffLng < 0.0001 && timeDiff < 10 * 1000) {
-          adicionarGpsLog('Ponto GPS ignorado: deslocamento insignificante (< 10m) há < 10s.');
+          adicionarGpsLog('Ponto GPS ignorado: deslocamento < 10m em < 10s. Tentando fila...');
           enviarFilaPendentes();
           return;
         }
@@ -82,7 +155,7 @@ export function useGpsTracker() {
 
     lastCoordsRef.current = { latitude, longitude, timestamp: Date.now() };
 
-    // Adicionar novo ponto à fila offline no localStorage
+    // Encapsular o ponto na fila offline
     const novoPonto = {
       idEmpresa: idEmpresaRef.current,
       idLote: idLoteRef.current,
@@ -93,7 +166,7 @@ export function useGpsTracker() {
       timestamp: Date.now()
     };
     
-    let fila = [];
+    let fila: any[] = [];
     try {
       const filaSalva = localStorage.getItem('gps_pending_queue');
       fila = filaSalva ? JSON.parse(filaSalva) : [];
@@ -103,389 +176,250 @@ export function useGpsTracker() {
     fila.push(novoPonto);
     localStorage.setItem('gps_pending_queue', JSON.stringify(fila));
     
-    // Iniciar processo de envio da fila
     enviarFilaPendentes();
   };
 
-  const enviarFilaPendentes = async () => {
-    const filaSalva = localStorage.getItem('gps_pending_queue');
-    if (!filaSalva) return;
-    
-    let fila = [];
-    try {
-      fila = JSON.parse(filaSalva);
-    } catch (e) {
-      localStorage.removeItem('gps_pending_queue');
-      return;
-    }
-    
-    if (fila.length === 0) return;
-    
-    // Evitar envios concorrentes da fila
-    if ((window as any)._gpsSendingQueue) return;
-    (window as any)._gpsSendingQueue = true;
-    
-    adicionarGpsLog(`[Fila] Sincronizando ${fila.length} pontos pendentes...`);
-    
-    const pontosRestantes = [...fila];
-    
-    while (pontosRestantes.length > 0) {
-      const ponto = pontosRestantes[0];
-      const tStart = Date.now();
-      try {
-        await gravarPontoGPS(
-          ponto.idEmpresa,
-          ponto.idLote,
-          ponto.numeroPedido,
-          ponto.latitude,
-          ponto.longitude,
-          ponto.accuracy
-        );
-        // Sucesso! Remover da fila
-        pontosRestantes.shift();
-        adicionarGpsLog(`[Fila] Sucesso no envio! Lat ${ponto.latitude}, Lng ${ponto.longitude} (Latência: ${Date.now() - tStart}ms)`);
-      } catch (err: any) {
-        adicionarGpsLog(`[Fila] Erro ao enviar ponto: ${err.message || err}. Suspendendo sincronização.`);
-        break; // Se falhar (por exemplo, sem rede), para o loop
-      }
-    }
-    
-    localStorage.setItem('gps_pending_queue', JSON.stringify(pontosRestantes));
-    (window as any)._gpsSendingQueue = false;
-  };
-
+  // ─── Início do rastreamento ─────────────────────────────────────────────────
   const startWatcher = async (idEmpresa: string, idLote: string, numeroPedido: string) => {
     adicionarGpsLog(`Iniciando startWatcher para Pedido ${numeroPedido}...`);
     adicionarGpsLog(`UA: ${navigator.userAgent}`);
     
-    // Configurar os refs do lote ativo
     idEmpresaRef.current = idEmpresa;
     idLoteRef.current = idLote;
     numeroPedidoRef.current = numeroPedido;
 
-    // Logar bateria
+    // Log de diagnóstico
     if ('getBattery' in navigator) {
       (navigator as any).getBattery().then((battery: any) => {
         adicionarGpsLog(`Bateria: ${(battery.level * 100).toFixed(0)}% | Carregando: ${battery.charging ? 'Sim' : 'Não'}`);
       }).catch(() => {});
     }
-
-    // Logar permissão de Geolocalização
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({ name: 'geolocation' as PermissionName })
-        .then((result) => {
-          adicionarGpsLog(`Permissão do Navegador: ${result.state}`);
-        })
+        .then((result) => adicionarGpsLog(`Permissão GPS: ${result.state}`))
         .catch(() => {});
     }
 
-    // Limpar watcher nativo anterior se houver
+    // Limpar watchers e timers anteriores
     if (nativeWatcherIdRef.current) {
-      try {
-        await BackgroundGeolocation.removeWatcher({ id: nativeWatcherIdRef.current });
-        adicionarGpsLog('Watcher nativo anterior removido.');
-      } catch (e) {}
+      try { await BackgroundGeolocation.removeWatcher({ id: nativeWatcherIdRef.current }); } catch (e) {}
       nativeWatcherIdRef.current = null;
     }
-
-    // Limpar watcher e intervalo anterior se houver
+    if (nativeIntervalIdRef.current !== null) {
+      clearInterval(nativeIntervalIdRef.current);
+      nativeIntervalIdRef.current = null;
+    }
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
-      adicionarGpsLog('Watcher de GPS anterior limpo.');
     }
     if (intervalIdRef.current !== null) {
       clearTimeout(intervalIdRef.current);
       intervalIdRef.current = null;
-      adicionarGpsLog('Intervalo de GPS anterior limpo.');
     }
 
-    // Se estiver em uma plataforma nativa (App Android instalado), use o plugin nativo de segundo plano
+    // ── MODO NATIVO (APK Android / iOS) ────────────────────────────────────
     if (Capacitor.isNativePlatform()) {
-      adicionarGpsLog('Plataforma nativa detectada. Iniciando Geolocation via Foreground Service do Capacitor...');
+      adicionarGpsLog('Plataforma nativa. Iniciando BackgroundGeolocation Foreground Service...');
       try {
         const watcherId = await BackgroundGeolocation.addWatcher(
           {
-            backgroundTitle: 'Rastreamento MagicRoute Ativo',
-            backgroundMessage: 'Sua rota está em transporte e a localização está sendo transmitida.',
+            backgroundTitle: 'MagicRoute — Rastreamento Ativo',
+            backgroundMessage: 'Localização em transmissão. Não feche o app.',
             requestPermissions: true,
             stale: false,
-            distanceFilter: 10 // Dispara a cada 10 metros
+            distanceFilter: 0 // 0 = dispara por tempo (sem filtro de distância)
           },
           (location: any, error: any) => {
             if (error) {
-              adicionarGpsLog(`[GPS Nativo] Erro no watcher: ${error.message || error}`);
+              adicionarGpsLog(`[GPS Nativo] Erro: ${error.message || JSON.stringify(error)}`);
               return;
             }
             if (location) {
-              const { latitude, longitude, accuracy, speed } = location;
-              processarPontoGPS(latitude, longitude, accuracy, 'BackgroundPlugin', speed);
+              processarPontoGPS(location.latitude, location.longitude, location.accuracy, 'NativePlugin', location.speed);
             }
           }
         );
         nativeWatcherIdRef.current = watcherId;
-        adicionarGpsLog(`[GPS Nativo] Watcher registrado com sucesso! ID: ${watcherId}`);
-        
-        // Também gravar ponto inicial nativo instantâneo para fins de feedback imediato
+        adicionarGpsLog(`[GPS Nativo] Watcher ativo! ID: ${watcherId}`);
+
+        // Ponto inicial imediato
         navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude, accuracy, speed } = position.coords;
-            processarPontoGPS(latitude, longitude, accuracy, 'InicialNativa', speed);
-          },
-          (err) => adicionarGpsLog(`Erro no ponto inicial GPS nativo: ${err.message}`),
-          { enableHighAccuracy: true, timeout: 5000 }
+          (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'NativeInicial', pos.coords.speed),
+          (err) => adicionarGpsLog(`[GPS Nativo] Erro ponto inicial: ${err.message}`),
+          { enableHighAccuracy: true, timeout: 8000 }
         );
-        
-        return; // Retorna para pular o fluxo web fallback
+
+        // Timer de 30s de fallback nativo — garante envios mesmo sem movimento
+        nativeIntervalIdRef.current = setInterval(() => {
+          adicionarGpsLog('[GPS Nativo] Timer 30s de fallback disparado...');
+          navigator.geolocation.getCurrentPosition(
+            (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'NativeTimer', pos.coords.speed),
+            (err) => {
+              adicionarGpsLog(`[GPS Nativo] Erro no timer: ${err.message}`);
+              enviarFilaPendentes(); // Tenta esvaziar fila mesmo sem novo ponto
+            },
+            { enableHighAccuracy: false, maximumAge: 20000, timeout: 10000 }
+          );
+        }, 30000);
+
+        return; // Não executa o fluxo web abaixo
       } catch (err: any) {
-        adicionarGpsLog(`[GPS Nativo] Falha ao configurar watcher nativo: ${err.message || err}. Usando fallback web...`);
+        adicionarGpsLog(`[GPS Nativo] Falha: ${err.message}. Fallback para modo web...`);
       }
     }
 
-    // Fluxo Web Fallback (Safari, Chrome Mobile, PWA)
-    // Iniciar áudio silencioso em segundo plano para manter a aba ativa no mobile
+    // ── MODO WEB FALLBACK (PWA / Chrome / Safari) ──────────────────────────
+    adicionarGpsLog('Modo Web (PWA/Browser). Iniciando rastreamento via navigator.geolocation...');
+
+    // Áudio silencioso para manter a aba ativa no background
     try {
       if ('audioSession' in navigator) {
-        try {
-          (navigator as any).audioSession.type = 'playback';
-          adicionarGpsLog('AudioSession configurada para playback.');
-        } catch (sessionErr: any) {
-          adicionarGpsLog(`Erro ao configurar AudioSession: ${sessionErr.message}`);
-        }
+        try { (navigator as any).audioSession.type = 'playback'; } catch (e) {}
       }
-
       if (!audioRef.current) {
-        adicionarGpsLog('Criando novo elemento de áudio silencioso local.');
         audioRef.current = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV');
         audioRef.current.loop = true;
       }
-
-      adicionarGpsLog('Garantindo reprodução ativa do áudio silencioso...');
-      audioRef.current.play()
-        .then(() => adicionarGpsLog('Áudio silencioso iniciado e tocando ativamente.'))
-        .catch((err: any) => adicionarGpsLog(`Alerta de Áudio: ${err.message}`));
-
+      audioRef.current.play().catch(() => {});
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: 'Rastreamento de Rota Ativo',
-          artist: 'MagicRoute',
-          album: 'Em Transporte'
+          title: 'Rastreamento MagicRoute',
+          artist: 'Em Transporte',
+          album: 'GPS Ativo'
         });
-        adicionarGpsLog('MediaSession metadata configurado.');
       }
-    } catch (audioErr: any) {
-      adicionarGpsLog(`Erro ao configurar áudio silencioso: ${audioErr.message}`);
-    }
+    } catch (e) {}
 
-    // Configurar heartbeat de áudio silencioso para evitar suspensão de timers no background
+    // Heartbeat via audio timeupdate (a cada 15s)
     if (audioRef.current) {
       if (timeUpdateListenerRef.current) {
-        try {
-          audioRef.current.removeEventListener('timeupdate', timeUpdateListenerRef.current);
-        } catch (e) {}
+        audioRef.current.removeEventListener('timeupdate', timeUpdateListenerRef.current);
       }
-
-      let lastHeartbeatTime = 0;
+      let lastHb = 0;
       const handleTimeUpdate = () => {
         const now = Date.now();
-        // Disparar a cada 10 segundos
-        if (now - lastHeartbeatTime >= 10000) {
-          lastHeartbeatTime = now;
-          adicionarGpsLog('GPS Heartbeat disparado (Via Evento de Áudio)...');
-          
+        if (now - lastHb >= 15000) {
+          lastHb = now;
+          adicionarGpsLog('Heartbeat via áudio (15s)...');
           navigator.geolocation.getCurrentPosition(
-            (position) => {
-              const { latitude, longitude, accuracy, speed } = position.coords;
-              processarPontoGPS(latitude, longitude, accuracy, 'Heartbeat', speed);
-            },
-            (err) => adicionarGpsLog(`Erro no GPS do Heartbeat: ${err.message}`),
-            {
-              enableHighAccuracy: false,
-              maximumAge: 15000,
-              timeout: 8000
-            }
+            (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'Heartbeat', pos.coords.speed),
+            (err) => adicionarGpsLog(`Heartbeat GPS erro: ${err.message}`),
+            { enableHighAccuracy: false, maximumAge: 15000, timeout: 8000 }
           );
         }
       };
-
       timeUpdateListenerRef.current = handleTimeUpdate;
       audioRef.current.addEventListener('timeupdate', handleTimeUpdate);
-      adicionarGpsLog('Listener de timeupdate registrado no áudio silencioso.');
     }
 
-    // Iniciar Screen Wake Lock (impedir tela de apagar)
-    const requestWakeLock = async () => {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-          adicionarGpsLog('Screen Wake Lock ativo.');
-        } else {
-          adicionarGpsLog('Wake Lock não suportado pelo navegador.');
-        }
-      } catch (err: any) {
-        adicionarGpsLog(`Falha ao solicitar Wake Lock: ${err.name} - ${err.message}`);
+    // Wake Lock
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        adicionarGpsLog('Screen Wake Lock ativo.');
       }
-    };
-    requestWakeLock();
+    } catch (e: any) { adicionarGpsLog(`Wake Lock falhou: ${e.message}`); }
 
     if (!navigator.geolocation) {
-      adicionarGpsLog('Erro: Geolocalização não suportada pelo navegador.');
+      adicionarGpsLog('Erro: geolocalização não suportada.');
       return;
     }
 
-    // Gravar ponto inicial imediatamente
+    // Ponto inicial
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude, accuracy, speed } = position.coords;
-        processarPontoGPS(latitude, longitude, accuracy, 'Inicial', speed);
-      },
-      (err) => adicionarGpsLog(`Erro no ponto inicial GPS: ${err.message}`),
-      { enableHighAccuracy: true, timeout: 5000 }
+      (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'Inicial', pos.coords.speed),
+      (err) => adicionarGpsLog(`Erro ponto inicial: ${err.message}`),
+      { enableHighAccuracy: true, timeout: 8000 }
     );
 
-    // Iniciar watch
+    // watchPosition contínuo
     watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude, accuracy, speed } = position.coords;
-        processarPontoGPS(latitude, longitude, accuracy, 'Watch', speed);
-      },
-      (error) => adicionarGpsLog(`Erro no watchPosition: ${error.message}`),
-      {
-        enableHighAccuracy: true,
-        maximumAge: 5000,
-        timeout: 10000
-      }
+      (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'Watch', pos.coords.speed),
+      (err) => adicionarGpsLog(`watchPosition erro: ${err.message}`),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
 
-    // Iniciar timer recursivo (setTimeout) de backup para segundo plano para evitar acúmulos e timeouts
-    const rodarTimerGPS = () => {
-      if (intervalIdRef.current === null) {
-        adicionarGpsLog('Timer de GPS cancelado ou parado.');
-        return;
-      }
-      
-      adicionarGpsLog('GPS Timer disparado (Segundo Plano)...');
+    // Timer recursivo de backup (15s)
+    const rodarTimer = () => {
+      if (intervalIdRef.current === null) return;
+      adicionarGpsLog('Timer GPS backup (15s)...');
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude, accuracy, speed } = position.coords;
-          processarPontoGPS(latitude, longitude, accuracy, 'Interval', speed);
-          
-          if (intervalIdRef.current !== null) {
-            intervalIdRef.current = setTimeout(rodarTimerGPS, 10000);
-          }
+        (pos) => {
+          processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'Timer', pos.coords.speed);
+          if (intervalIdRef.current !== null) intervalIdRef.current = setTimeout(rodarTimer, 15000);
         },
         (err) => {
-          adicionarGpsLog(`Erro no GPS do Timer: ${err.message}`);
-          
-          if (intervalIdRef.current !== null) {
-            intervalIdRef.current = setTimeout(rodarTimerGPS, 10000);
-          }
+          adicionarGpsLog(`Timer GPS erro: ${err.message}`);
+          enviarFilaPendentes(); // Tenta esvaziar fila mesmo sem novo ponto
+          if (intervalIdRef.current !== null) intervalIdRef.current = setTimeout(rodarTimer, 15000);
         },
-        {
-          enableHighAccuracy: false, // Usar baixa precisão no background para economizar bateria e hardware
-          maximumAge: 15000, // Aceitar posições em cache de até 15 segundos
-          timeout: 8000 // Timeout de 8s para dar mais estabilidade em segundo plano
-        }
+        { enableHighAccuracy: false, maximumAge: 20000, timeout: 10000 }
       );
     };
-
-    // Iniciar o timeout recursivo
-    intervalIdRef.current = setTimeout(rodarTimerGPS, 5000);
+    intervalIdRef.current = setTimeout(rodarTimer, 15000);
   };
 
+  // ─── Parada do rastreamento ─────────────────────────────────────────────────
   const stopWatcher = async () => {
-    adicionarGpsLog('Parando watch e interval...');
+    adicionarGpsLog('Parando rastreamento GPS...');
     
-    // Parar watcher nativo se ativo
     if (nativeWatcherIdRef.current) {
-      try {
-        await BackgroundGeolocation.removeWatcher({ id: nativeWatcherIdRef.current });
-        adicionarGpsLog('Watcher nativo removido com sucesso.');
-      } catch (e: any) {
-        adicionarGpsLog(`Erro ao remover watcher nativo: ${e.message}`);
-      }
+      try { await BackgroundGeolocation.removeWatcher({ id: nativeWatcherIdRef.current }); } catch (e) {}
       nativeWatcherIdRef.current = null;
     }
-
+    if (nativeIntervalIdRef.current !== null) {
+      clearInterval(nativeIntervalIdRef.current);
+      nativeIntervalIdRef.current = null;
+    }
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
-
     if (intervalIdRef.current !== null) {
       clearTimeout(intervalIdRef.current);
       intervalIdRef.current = null;
     }
-
     if (wakeLockRef.current) {
-      try {
-        wakeLockRef.current.release()
-          .then(() => {
-            wakeLockRef.current = null;
-            adicionarGpsLog('Screen Wake Lock liberado.');
-          })
-          .catch((err: any) => adicionarGpsLog(`Erro ao liberar Wake Lock: ${err.message}`));
-      } catch (e: any) {
-        adicionarGpsLog(`Exceção ao liberar Wake Lock: ${e.message}`);
-      }
+      try { await wakeLockRef.current.release(); } catch (e) {}
+      wakeLockRef.current = null;
     }
-    
     if (audioRef.current) {
       if (timeUpdateListenerRef.current) {
-        try {
-          audioRef.current.removeEventListener('timeupdate', timeUpdateListenerRef.current);
-          timeUpdateListenerRef.current = null;
-          adicionarGpsLog('Listener de timeupdate do áudio removido.');
-        } catch (e) {}
+        audioRef.current.removeEventListener('timeupdate', timeUpdateListenerRef.current);
+        timeUpdateListenerRef.current = null;
       }
-      try {
-        audioRef.current.pause();
-        audioRef.current = null;
-        adicionarGpsLog('Áudio silencioso local parado.');
-      } catch (audioErr: any) {
-        adicionarGpsLog(`Erro ao pausar áudio local: ${audioErr.message}`);
-      }
+      try { audioRef.current.pause(); } catch (e) {}
+      audioRef.current = null;
     }
-
-    if ((window as any)._gpsSilentAudio) {
-      try {
-        (window as any)._gpsSilentAudio.pause();
-        (window as any)._gpsSilentAudio = null;
-        adicionarGpsLog('Áudio silencioso global parado.');
-      } catch (audioErr: any) {
-        adicionarGpsLog(`Erro ao pausar áudio global: ${audioErr.message}`);
-      }
-    }
-
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = null;
-    }
-
+    if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
     lastCoordsRef.current = null;
+    // Garantir liberação da flag de envio
+    (window as any)._gpsSendingQueue = false;
+    adicionarGpsLog('Rastreamento GPS parado com sucesso.');
   };
 
+  // ─── Montagem do hook ───────────────────────────────────────────────────────
   useEffect(() => {
+    // Retomar rastreamento se estava ativo antes (reload/crash)
     const savedActive = localStorage.getItem('gps_tracking_active');
     if (savedActive) {
       try {
         const { idEmpresa, idLote, numeroPedido } = JSON.parse(savedActive);
         if (idEmpresa && idLote && numeroPedido) {
-          adicionarGpsLog(`Resumindo rastreamento ativo do localStorage para pedido ${numeroPedido}.`);
+          adicionarGpsLog(`Retomando rastreamento para pedido ${numeroPedido}...`);
           startWatcher(idEmpresa, idLote, numeroPedido);
         }
       } catch (e: any) {
-        adicionarGpsLog(`Erro ao ler localStorage: ${e.message}`);
+        adicionarGpsLog(`Erro ao retomar rastreamento: ${e.message}`);
       }
     }
 
     const handleStartEvent = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const { idEmpresa, idLote, numeroPedido, audioElement } = customEvent.detail;
-      adicionarGpsLog(`Evento iniciar-gps recebido para pedido ${numeroPedido}.`);
-      if (audioElement) {
-        adicionarGpsLog('Elemento de áudio recebido do evento de gesto de clique.');
-        audioRef.current = audioElement;
-      }
+      const ev = e as CustomEvent;
+      const { idEmpresa, idLote, numeroPedido, audioElement } = ev.detail;
+      adicionarGpsLog(`Evento iniciar-gps para pedido ${numeroPedido}.`);
+      if (audioElement) audioRef.current = audioElement;
       localStorage.setItem('gps_tracking_active', JSON.stringify({ idEmpresa, idLote, numeroPedido }));
       startWatcher(idEmpresa, idLote, numeroPedido);
     };
@@ -498,19 +432,13 @@ export function useGpsTracker() {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && localStorage.getItem('gps_tracking_active')) {
-        adicionarGpsLog('Visibilidade restaurada. Solicitando Wake Lock novamente.');
+        adicionarGpsLog('Visibilidade restaurada — reativando Wake Lock e esvaziando fila.');
         if ('wakeLock' in navigator && !wakeLockRef.current) {
           (navigator as any).wakeLock.request('screen')
-            .then((sentinel: any) => {
-              wakeLockRef.current = sentinel;
-              adicionarGpsLog('Screen Wake Lock reativado com sucesso.');
-            })
-            .catch((err: any) => adicionarGpsLog(`Erro ao reativar Wake Lock: ${err.message}`));
+            .then((s: any) => { wakeLockRef.current = s; })
+            .catch(() => {});
         }
-        // Sincronizar fila local ao retornar visibilidade
         enviarFilaPendentes();
-      } else if (document.visibilityState === 'hidden') {
-        adicionarGpsLog('Página oculta (minimizado/segundo plano).');
       }
     };
 
