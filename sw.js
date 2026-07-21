@@ -1,4 +1,4 @@
-const CACHE_NAME = 'magicroute-v1.1.7';
+const CACHE_NAME = 'magicroute-v1.1.8';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -49,6 +49,8 @@ self.addEventListener('fetch', (event) => {
   if (
     event.request.method !== 'GET' ||
     reqUrl.pathname.includes('/api/') ||
+    reqUrl.pathname.includes('/api/gps/') ||
+    reqUrl.pathname.includes('gps-point') ||
     reqUrl.hostname.includes('ngrok') ||
     reqUrl.hostname.includes('loca.lt') ||
     reqUrl.hostname.includes('trycloudflare.com') ||
