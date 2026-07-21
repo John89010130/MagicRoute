@@ -1047,8 +1047,63 @@ export default function Entregas() {
     return { wazeUrl, mapsUrl };
   };
 
+  // Abre os navegadores usando esquemas nativos deep link e fallback universal
+  const abrirNavegador = (app: 'waze' | 'maps', lat: any, lng: any, endereco: string) => {
+    const isAndroid = /android/i.test(navigator.userAgent);
+    const isIOS = /ipad|iphone|ipod/i.test(navigator.userAgent);
+    const hasCoords = lat && lng && lat !== '0' && lng !== '0';
+
+    let url = '';
+    if (app === 'waze') {
+      if (hasCoords) {
+        url = `waze://?ll=${lat},${lng}&navigate=yes`;
+      } else if (endereco) {
+        url = `waze://?q=${encodeURIComponent(endereco)}&navigate=yes`;
+      }
+      if (!isAndroid && !isIOS) {
+        url = hasCoords 
+          ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes` 
+          : `https://waze.com/ul?q=${encodeURIComponent(endereco)}&navigate=yes`;
+      }
+    } else { // Google Maps
+      if (isIOS) {
+        url = hasCoords
+          ? `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`
+          : `comgooglemaps://?daddr=${encodeURIComponent(endereco)}&directionsmode=driving`;
+      } else if (isAndroid) {
+        url = hasCoords
+          ? `google.navigation:q=${lat},${lng}`
+          : `google.navigation:q=${encodeURIComponent(endereco)}`;
+      } else {
+        url = hasCoords
+          ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
+          : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(endereco)}&travelmode=driving`;
+      }
+    }
+
+    adicionarGpsLog(`Abrindo app de navegação (${app}): ${url}`);
+
+    if (isIOS || isAndroid) {
+      window.location.href = url;
+      
+      // Fallback temporizado de 1.5 segundos se o app não estiver instalado (a página continuará visível)
+      const tStart = Date.now();
+      setTimeout(() => {
+        if (!document.hidden && Date.now() - tStart < 2200) {
+          adicionarGpsLog('App nativo não respondeu. Abrindo link web/fallback.');
+          const webUrl = app === 'waze'
+            ? (hasCoords ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes` : `https://waze.com/ul?q=${encodeURIComponent(endereco)}&navigate=yes`)
+            : (hasCoords ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving` : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(endereco)}&travelmode=driving`);
+          window.location.href = webUrl;
+        }
+      }, 1500);
+    } else {
+      window.open(url, '_blank');
+    }
+  };
+
   // Inicia GPS e dispara evento de entrega, depois abre o app escolhido
-  const prosseguirNavegacao = (entrega: any, audio: HTMLAudioElement | null, navUrl: string) => {
+  const prosseguirNavegacao = (entrega: any, audio: HTMLAudioElement | null, app: 'waze' | 'maps' | 'none') => {
     if (!user) return;
     adicionarGpsLog('Iniciando processo de entrega...');
 
@@ -1062,6 +1117,17 @@ export default function Entregas() {
 
     // Ativar widget flutuante
     setEntregaEmTransporte(entrega);
+
+    // Enviar notificação para o Service Worker (para funcionar em segundo plano)
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      const clienteNome = entrega.NomeCliente || entrega.NOMECLIENTE || `Pedido ${entrega.NumeroPedido}`;
+      const endereco = entrega.EnderecoEntrega || entrega.ENDERECO || '';
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SHOW_TRANSPORT_NOTIFICATION',
+        clienteNome,
+        endereco
+      });
+    }
 
     // Disparar GPS
     window.dispatchEvent(new CustomEvent('iniciar-gps', {
@@ -1079,13 +1145,24 @@ export default function Entregas() {
       .then(() => fetchEntregas())
       .catch(() => {})
       .finally(() => {
-        adicionarGpsLog(`Abrindo navegador: ${navUrl}`);
-        if (navUrl) window.open(navUrl, '_blank');
+        if (app !== 'none') {
+          const lat = entrega.LatitudeEntrega || entrega.LATITUDE;
+          const lng = entrega.LongitudeEntrega || entrega.LONGITUDE;
+          const enderecoStr = entrega.EnderecoEntrega || entrega.ENDERECO || '';
+          abrirNavegador(app, lat, lng, enderecoStr);
+        }
       });
   };
 
   const handleIniciarEntrega = async (entrega: any) => {
     if (!user) return;
+
+    // Pedir permissão de notificações se necessário para mostrar no background
+    if ('Notification' in window && Notification.permission === 'default') {
+      try {
+        await Notification.requestPermission();
+      } catch (e) {}
+    }
 
     const { wazeUrl, mapsUrl } = buildNavUrls(entrega);
 
@@ -1112,7 +1189,6 @@ export default function Entregas() {
     // Pedir permissão de localização
     if (!navigator.geolocation) {
       alert('Seu navegador não suporta geolocalização.');
-      // Sem geolocalização: mostrar modal de escolha mesmo assim
       setNavModalEntrega(entrega);
       setNavModalAudio(audio);
       setShowNavModal(true);
@@ -1121,7 +1197,6 @@ export default function Entregas() {
 
     navigator.geolocation.getCurrentPosition(
       () => {
-        // Permissão concedida: mostrar modal de escolha de app
         setNavModalEntrega(entrega);
         setNavModalAudio(audio);
         setShowNavModal(true);
@@ -1134,7 +1209,6 @@ export default function Entregas() {
             "O rastreamento não funcionará até que você conceda permissão nas configurações do celular."
           );
         }
-        // Mesmo sem GPS, mostrar modal para o usuário escolher o navegador
         setNavModalEntrega(entrega);
         setNavModalAudio(audio);
         setShowNavModal(true);
@@ -1142,7 +1216,6 @@ export default function Entregas() {
       { enableHighAccuracy: false, timeout: 6000, maximumAge: 30000 }
     );
 
-    // Silenciar linter — wazeUrl e mapsUrl são usados no modal
     void wazeUrl; void mapsUrl;
   };
 
@@ -1170,6 +1243,10 @@ export default function Entregas() {
     }));
     setEntregaEmTransporte(null); // Remover widget flutuante
 
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'CLOSE_TRANSPORT_NOTIFICATION' });
+    }
+
     const chave = `${entrega.IDEmpresa || user.idEmpresa}${idLote}${entrega.NumeroPedido}`;
     try {
       await gravarEvento(user.codigo, user.codigo, 'LimpaInicioFinalEntrega', chave);
@@ -1186,6 +1263,10 @@ export default function Entregas() {
     // Disparar parada do rastreamento GPS
     window.dispatchEvent(new CustomEvent('parar-gps'));
     setEntregaEmTransporte(null); // Remover widget flutuante
+
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'CLOSE_TRANSPORT_NOTIFICATION' });
+    }
 
     try {
       // Verificar se esta é a última entrega pendente
@@ -2835,128 +2916,104 @@ export default function Entregas() {
         userSelect: 'none',
         width: '100%'
       }}>
-        Versão: 1.1.8 - GPS Fix &amp; Nav Modal
+        Versão: 1.1.9 - GPS &amp; Nav Custom Overlay
       </div>
 
-      {/* ── Modal de Seleção de Navegador ─────────────────────────────────── */}
+      {/* ── Modal de Seleção de Navegador (Popup Discreto Fundo Branco) ─────── */}
       {showNavModal && navModalEntrega && (() => {
-        const { wazeUrl, mapsUrl } = buildNavUrls(navModalEntrega);
         return (
           <div
             onClick={() => setShowNavModal(false)}
             style={{
               position: 'fixed', inset: 0,
-              background: 'rgba(0,0,0,0.6)',
-              backdropFilter: 'blur(4px)',
+              background: 'rgba(0, 0, 0, 0.4)',
+              backdropFilter: 'blur(3px)',
               zIndex: 9000,
               display: 'flex',
-              alignItems: 'flex-end',
+              alignItems: 'center',
               justifyContent: 'center',
-              padding: '0 0 24px 0',
+              padding: '16px',
               animation: 'fadeIn 0.15s ease'
             }}
           >
             <div
               onClick={e => e.stopPropagation()}
               style={{
-                background: 'linear-gradient(145deg, #1e293b, #0f172a)',
-                borderRadius: '20px 20px 16px 16px',
-                border: '1px solid rgba(255,255,255,0.1)',
-                padding: '24px',
+                background: '#ffffff',
+                borderRadius: '16px',
+                padding: '20px',
                 width: '100%',
-                maxWidth: '420px',
-                boxShadow: '0 -8px 40px rgba(0,0,0,0.5)',
+                maxWidth: '340px',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                border: '1px solid #e2e8f0',
+                textAlign: 'center'
               }}
             >
-              <div style={{ textAlign: 'center', marginBottom: '8px' }}>
-                <div style={{
-                  width: '40px', height: '4px',
-                  background: 'rgba(255,255,255,0.2)',
-                  borderRadius: '2px', margin: '0 auto 16px'
-                }} />
-                <p style={{ color: '#94a3b8', fontSize: '0.78rem', margin: 0 }}>
-                  📍 {navModalEntrega.EnderecoEntrega || navModalEntrega.ENDERECO || 'Destino selecionado'}
-                </p>
-                <h3 style={{ color: '#f1f5f9', margin: '6px 0 20px', fontSize: '1rem', fontWeight: 700 }}>
-                  Abrir com qual app?
-                </h3>
-              </div>
+              <h3 style={{ color: '#1e293b', margin: '0 0 8px 0', fontSize: '1.05rem', fontWeight: 700 }}>
+                Escolha o Navegador
+              </h3>
+              <p style={{ color: '#64748b', fontSize: '0.78rem', margin: '0 0 20px 0', lineHeight: '1.4' }}>
+                Selecione o aplicativo para guiar até o destino:
+              </p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {/* Waze */}
-                {wazeUrl && (
-                  <button
-                    id="btn-nav-waze"
-                    onClick={() => {
-                      setShowNavModal(false);
-                      prosseguirNavegacao(navModalEntrega, navModalAudio, wazeUrl);
-                    }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '12px',
-                      background: 'linear-gradient(135deg, #33ccff22, #33ccff11)',
-                      border: '1px solid #33ccff44',
-                      borderRadius: '12px', padding: '14px 18px',
-                      cursor: 'pointer', color: '#f1f5f9',
-                      fontSize: '0.95rem', fontWeight: 600,
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg, #33ccff33, #33ccff22)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg, #33ccff22, #33ccff11)')}
-                  >
-                    <span style={{ fontSize: '1.5rem' }}>🗺️</span>
-                    <div style={{ textAlign: 'left' }}>
-                      <div>Waze</div>
-                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 400 }}>Trânsito em tempo real</div>
-                    </div>
-                    <span style={{ marginLeft: 'auto', color: '#33ccff', fontSize: '1rem' }}>→</span>
-                  </button>
-                )}
+                <button
+                  id="btn-nav-waze"
+                  onClick={() => {
+                    setShowNavModal(false);
+                    prosseguirNavegacao(navModalEntrega, navModalAudio, 'waze');
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifySelf: 'center', gap: '12px',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px', padding: '12px 16px',
+                    cursor: 'pointer', color: '#334155',
+                    fontSize: '0.88rem', fontWeight: 600,
+                    width: '100%',
+                    textAlign: 'left',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '#f8fafc')}
+                >
+                  <span style={{ fontSize: '1.25rem' }}>🗺️</span>
+                  <div>
+                    <div style={{ color: '#0f172a' }}>Waze</div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 400 }}>Abrir app nativo</div>
+                  </div>
+                  <span style={{ marginLeft: 'auto', color: '#8c2cf5', fontSize: '1.1rem' }}>›</span>
+                </button>
 
                 {/* Google Maps */}
-                {mapsUrl && (
-                  <button
-                    id="btn-nav-maps"
-                    onClick={() => {
-                      setShowNavModal(false);
-                      prosseguirNavegacao(navModalEntrega, navModalAudio, mapsUrl);
-                    }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '12px',
-                      background: 'linear-gradient(135deg, #4ade8022, #4ade8011)',
-                      border: '1px solid #4ade8044',
-                      borderRadius: '12px', padding: '14px 18px',
-                      cursor: 'pointer', color: '#f1f5f9',
-                      fontSize: '0.95rem', fontWeight: 600,
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg, #4ade8033, #4ade8022)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg, #4ade8022, #4ade8011)')}
-                  >
-                    <span style={{ fontSize: '1.5rem' }}>🌍</span>
-                    <div style={{ textAlign: 'left' }}>
-                      <div>Google Maps</div>
-                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 400 }}>Navegação detalhada</div>
-                    </div>
-                    <span style={{ marginLeft: 'auto', color: '#4ade80', fontSize: '1rem' }}>→</span>
-                  </button>
-                )}
-
-                {/* Sem URL disponível */}
-                {!wazeUrl && !mapsUrl && (
-                  <button
-                    onClick={() => {
-                      setShowNavModal(false);
-                      prosseguirNavegacao(navModalEntrega, navModalAudio, '');
-                    }}
-                    style={{
-                      background: '#2563eb22', border: '1px solid #2563eb44',
-                      borderRadius: '12px', padding: '14px 18px',
-                      cursor: 'pointer', color: '#f1f5f9', fontSize: '0.95rem'
-                    }}
-                  >
-                    Iniciar sem navegação
-                  </button>
-                )}
+                <button
+                  id="btn-nav-maps"
+                  onClick={() => {
+                    setShowNavModal(false);
+                    prosseguirNavegacao(navModalEntrega, navModalAudio, 'maps');
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifySelf: 'center', gap: '12px',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px', padding: '12px 16px',
+                    cursor: 'pointer', color: '#334155',
+                    fontSize: '0.88rem', fontWeight: 600,
+                    width: '100%',
+                    textAlign: 'left',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '#f8fafc')}
+                >
+                  <span style={{ fontSize: '1.25rem' }}>🌍</span>
+                  <div>
+                    <div style={{ color: '#0f172a' }}>Google Maps</div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 400 }}>Abrir rotas do Maps</div>
+                  </div>
+                  <span style={{ marginLeft: 'auto', color: '#8c2cf5', fontSize: '1.1rem' }}>›</span>
+                </button>
 
                 {/* Cancelar */}
                 <button
@@ -2964,16 +3021,17 @@ export default function Entregas() {
                   onClick={() => setShowNavModal(false)}
                   style={{
                     background: 'transparent',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '12px', padding: '12px',
-                    cursor: 'pointer', color: '#94a3b8',
-                    fontSize: '0.85rem', marginTop: '4px',
-                    transition: 'all 0.2s ease',
+                    border: 'none',
+                    borderRadius: '10px', padding: '10px',
+                    cursor: 'pointer', color: '#64748b',
+                    fontSize: '0.82rem', marginTop: '4px',
+                    fontWeight: 500,
+                    transition: 'all 0.15s ease',
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#f1f5f9')}
-                  onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#334155')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}
                 >
-                  Cancelar
+                  Fechar
                 </button>
               </div>
             </div>
@@ -2981,49 +3039,49 @@ export default function Entregas() {
         );
       })()}
 
-      {/* ── Widget Flutuante "Em Transporte" ──────────────────────────────── */}
+      {/* ── Widget Flutuante "Em Transporte" (Tema Claro Padrão do App) ────── */}
       {entregaEmTransporte && (
         <div
           id="floating-transport-widget"
           style={{
             position: 'fixed',
-            bottom: '24px',
+            bottom: '20px',
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 8000,
             animation: 'slideUpFade 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            width: 'calc(100% - 32px)',
+            maxWidth: '360px',
           }}
         >
           <div style={{
-            background: 'linear-gradient(135deg, #0f172a, #1e293b)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: '18px',
-            padding: '12px 16px',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '14px',
+            padding: '12px 14px',
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(59,130,246,0.3)',
-            minWidth: '280px',
-            maxWidth: '360px',
+            gap: '10px',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08)',
           }}>
             {/* Indicador pulsante */}
-            <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
               <div style={{
-                width: '12px', height: '12px',
+                width: '10px', height: '10px',
                 borderRadius: '50%',
                 background: '#22c55e',
-                boxShadow: '0 0 8px #22c55e',
+                boxShadow: '0 0 6px #22c55e',
                 animation: 'pulseDot 1.5s ease-in-out infinite',
               }} />
             </div>
 
             {/* Info da entrega */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: '#22c55e', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                🚚 Em Transporte
+              <div style={{ color: '#22c55e', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                Em Rota
               </div>
               <div style={{
-                color: '#f1f5f9', fontSize: '0.8rem', fontWeight: 600,
+                color: '#1e293b', fontSize: '0.78rem', fontWeight: 600,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
               }}>
                 {entregaEmTransporte.NomeCliente || entregaEmTransporte.NOMECLIENTE || `Pedido ${entregaEmTransporte.NumeroPedido}`}
@@ -3038,20 +3096,20 @@ export default function Entregas() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               style={{
-                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                background: '#8c2cf5',
                 border: 'none',
-                borderRadius: '10px',
-                padding: '8px 14px',
-                color: '#fff',
-                fontSize: '0.75rem',
-                fontWeight: 700,
+                borderRadius: '8px',
+                padding: '6px 12px',
+                color: '#ffffff',
+                fontSize: '0.72rem',
+                fontWeight: 600,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
-                boxShadow: '0 2px 8px rgba(37,99,235,0.4)',
-                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(140, 44, 245, 0.2)',
+                transition: 'all 0.15s ease',
                 flexShrink: 0,
               }}
-              onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+              onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.02)')}
               onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
             >
               Finalizar
@@ -3063,14 +3121,14 @@ export default function Entregas() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#64748b',
+                color: '#94a3b8',
                 cursor: 'pointer',
                 padding: '4px',
-                fontSize: '1rem',
+                fontSize: '0.9rem',
                 lineHeight: 1,
                 flexShrink: 0,
               }}
-              title="Fechar"
+              title="Fechar Widget"
             >
               ✕
             </button>
@@ -3084,12 +3142,12 @@ export default function Entregas() {
           to   { opacity: 1; }
         }
         @keyframes slideUpFade {
-          from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+          from { opacity: 0; transform: translateX(-50%) translateY(16px); }
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
         @keyframes pulseDot {
           0%, 100% { opacity: 1; transform: scale(1); }
-          50%       { opacity: 0.5; transform: scale(1.4); }
+          50%       { opacity: 0.4; transform: scale(1.35); }
         }
       `}</style>
     </div>
