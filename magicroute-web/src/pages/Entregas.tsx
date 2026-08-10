@@ -1367,9 +1367,10 @@ export default function Entregas() {
     if (!user || !idLote) return;
     try {
       await Promise.all(
-        entregasRef.current.map((entrega, idx) => {
+        entregas.map((entrega, idx) => {
           const nf = entrega.NrNotaFiscal || entrega.NRDOCUMENTO || '';
-          return atualizarSequencia(user.idEmpresa, idLote, nf, idx + 1);
+          const pedido = entrega.NumeroPedido || '';
+          return atualizarSequencia(user.idEmpresa, idLote, nf, idx + 1, pedido);
         })
       );
       

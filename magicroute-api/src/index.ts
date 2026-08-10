@@ -251,6 +251,11 @@ app.get('/BuscaEntregasIDLote', async (req, res) => {
 
 app.post('/RoteirizaIDLote', async (req, res) => {
   const { IDEmpresa, IDLote, OtimizarRota } = req.body;
+
+  if (Number(OtimizarRota) === 0) {
+    return res.json({ sucesso: true, mensagem: 'Ordem manual preservada.' });
+  }
+
   try {
     // 1. Tenta no master2 (onde as procedures estão localizadas)
     await executeQuery(`EXEC master2..ExecutaRoteirizacao ${Number(IDEmpresa)}, ${Number(IDLote)}, ${Number(OtimizarRota)}`);
@@ -354,13 +359,25 @@ app.post('/RoteirizaIDLote', async (req, res) => {
 });
 
 app.post('/AtualizaSequencia', async (req, res) => {
-  const { IDEmpresa, IDLote, NrNotaFiscal, Sequencia } = req.body;
+  const { IDEmpresa, IDLote, NrNotaFiscal, NumeroPedido, Sequencia } = req.body;
   const cleanNF = sanitize(NrNotaFiscal || '');
+  const cleanPedido = sanitize(NumeroPedido || '');
   try {
+    let whereMatch = '';
+    if (cleanNF && cleanPedido) {
+      whereMatch = `AND (NrNotaFiscal = '${cleanNF}' OR NumeroPedido = '${cleanPedido}')`;
+    } else if (cleanNF) {
+      whereMatch = `AND NrNotaFiscal = '${cleanNF}'`;
+    } else if (cleanPedido) {
+      whereMatch = `AND NumeroPedido = '${cleanPedido}'`;
+    } else {
+      return res.status(400).json({ sucesso: false, mensagem: 'NrNotaFiscal ou NumeroPedido é obrigatório.' });
+    }
+
     await executeQuery(
       `UPDATE startapp_magicroute..LotesEntregas 
        SET SequenciaRoteirizada = ${Number(Sequencia)} 
-       WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)} AND (NrNotaFiscal = '${cleanNF}' OR NumeroPedido = '${cleanNF}')`
+       WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)} ${whereMatch}`
     );
     res.json({ sucesso: true });
   } catch (err: any) {

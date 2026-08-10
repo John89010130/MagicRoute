@@ -204,11 +204,12 @@ export async function atualizarSequencia(
   idEmpresa: string,
   idLote: string,
   nrNotaFiscal: string,
-  sequencia: number
+  sequencia: number,
+  numeroPedido?: string
 ) {
   return apiRequest('/AtualizaSequencia', {
     method: 'POST',
-    body: { IDEmpresa: idEmpresa, IDLote: idLote, NrNotaFiscal: nrNotaFiscal, Sequencia: sequencia },
+    body: { IDEmpresa: idEmpresa, IDLote: idLote, NrNotaFiscal: nrNotaFiscal, NumeroPedido: numeroPedido, Sequencia: sequencia },
   });
 }
 
