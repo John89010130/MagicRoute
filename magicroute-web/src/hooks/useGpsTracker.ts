@@ -40,6 +40,26 @@ export const adicionarGpsLog = (msg: string) => {
   }
 };
 
+export const setEntregaAtivaPiP = (ativa: boolean) => {
+  if (typeof window !== 'undefined' && (window as any).AndroidPip?.setDeliveryActive) {
+    try {
+      (window as any).AndroidPip.setDeliveryActive(ativa);
+      adicionarGpsLog(`Sinalizado entregaAtiva PiP: ${ativa}`);
+    } catch (e) {}
+  }
+};
+
+export const ativarModoPiP = () => {
+  if (typeof window !== 'undefined' && (window as any).AndroidPip?.enterPiP) {
+    try {
+      (window as any).AndroidPip.enterPiP();
+      adicionarGpsLog('Modo Picture-in-Picture acionado via JS.');
+      return true;
+    } catch (e) {}
+  }
+  return false;
+};
+
 export function useGpsTracker() {
   const watchIdRef = useRef<number | null>(null);
   const intervalIdRef = useRef<any | null>(null);
@@ -187,6 +207,8 @@ export function useGpsTracker() {
     idEmpresaRef.current = idEmpresa;
     idLoteRef.current = idLote;
     numeroPedidoRef.current = numeroPedido;
+
+    setEntregaAtivaPiP(true);
 
     // Log de diagnóstico
     if ('getBattery' in navigator) {
@@ -363,6 +385,7 @@ export function useGpsTracker() {
   // ─── Parada do rastreamento ─────────────────────────────────────────────────
   const stopWatcher = async () => {
     adicionarGpsLog('Parando rastreamento GPS...');
+    setEntregaAtivaPiP(false);
     
     if (nativeWatcherIdRef.current) {
       try { await BackgroundGeolocation.removeWatcher({ id: nativeWatcherIdRef.current }); } catch (e) {}

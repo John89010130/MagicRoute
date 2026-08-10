@@ -8,12 +8,20 @@ interface RequestOptions {
   keepalive?: boolean;
 }
 
-// Limpar URLs legadas antigas (Ngrok/Localtunnel) salvas no LocalStorage dos clientes
+// Limpar URLs legadas/inseguras salvas no LocalStorage dos clientes
 try {
   const savedUrl = localStorage.getItem('CUSTOM_API_URL');
-  if (savedUrl && (savedUrl.includes('ngrok') || savedUrl.includes('loca.lt'))) {
-    localStorage.removeItem('CUSTOM_API_URL');
-    console.log('[API] URL customizada legada removida do LocalStorage.');
+  if (savedUrl) {
+    if (
+      savedUrl.includes('ngrok') ||
+      savedUrl.includes('loca.lt') ||
+      savedUrl.includes('localhost') ||
+      savedUrl.includes('127.0.0.1') ||
+      (typeof window !== 'undefined' && window.location.protocol === 'https:' && savedUrl.startsWith('http:'))
+    ) {
+      localStorage.removeItem('CUSTOM_API_URL');
+      console.log('[API] URL customizada legada/insegura removida do LocalStorage.');
+    }
   }
 } catch (e) {
   console.error('Erro ao limpar LocalStorage:', e);

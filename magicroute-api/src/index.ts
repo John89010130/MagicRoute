@@ -108,38 +108,59 @@ app.get('/BuscaEntregasData', async (req, res) => {
   if (!requireParam(idEmpresa, 'IdEmpresa', res)) return;
   const codigoMotorista = sanitize(req.query.CodigoMotorista as string || '');
 
-  let dataInicial = sanitize(req.query.DataIncial as string || '');
+  let dataInicial = sanitize(req.query.DataIncial as string || req.query.DataInicial as string || '');
   if (!dataInicial) {
     const today = new Date();
-    dataInicial = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
+    dataInicial = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
   }
   let dataFinal = sanitize(req.query.DataFinal as string || '') || dataInicial;
 
-  const dataInicialISO = normalizarDataParaISO(dataInicial);
-  const dataFinalISO = normalizarDataParaISO(dataFinal);
+  const dInicialISO = normalizarDataParaISO(dataInicial);
+  const dFinalISO = normalizarDataParaISO(dataFinal);
 
-  let filterQuery = `WHERE ent.IDEmpresa = ${idEmpresa}`;
+  let whereConds = [`lot.IDEmpresa = ${idEmpresa}`];
+
   if (codigoMotorista && codigoMotorista !== 'undefined' && codigoMotorista !== 'null' && codigoMotorista.trim() !== '') {
-    filterQuery += ` AND ent.CodigoMotorista = ${codigoMotorista}`;
+    whereConds.push(`lot.CodigoMotorista = ${codigoMotorista}`);
   }
-  if (dataInicialISO && dataFinalISO && req.query.ignorarData !== 'true') {
-    filterQuery += ` AND CONVERT(DATE, ent.DataEntrega, 103) BETWEEN '${dataInicialISO}' AND '${dataFinalISO}'`;
+
+  if (req.query.ignorarData !== 'true' && dInicialISO) {
+    whereConds.push(`(
+      lot.DataLote = '${dInicialISO}'
+      OR TRY_CAST(lot.DataLote AS DATE) BETWEEN TRY_CAST('${dInicialISO}' AS DATE) AND TRY_CAST('${dFinalISO}' AS DATE)
+      OR TRY_CAST(ent.DataEntrega AS DATE) BETWEEN TRY_CAST('${dInicialISO}' AS DATE) AND TRY_CAST('${dFinalISO}' AS DATE)
+    )`);
   }
 
   const query = `SELECT
-    ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.UrlVeiculo, ent.PlacaEntrega, ent.CodigoMotorista,
-    ent.HoraSaidaPrevista, ent.HoraRetornoPrevista,
-    usr.Nome AS NomeMotorista,
-    SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END) AS Pendente,
-    SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END) AS Entregue,
-    SUM(CASE WHEN ent.StatusEntrega = 'Em Transporte' THEN 1 ELSE 0 END) AS EmTransporte,
+    lot.IDLote,
+    lot.IDEmpresa,
+    lot.DataLote AS DataEntrega,
+    lot.CodigoMotorista,
+    u.Nome AS NomeMotorista,
+    locSaida.NomeLocal AS LocalSaida,
+    locChegada.NomeLocal AS LocalChegada,
+    vei.Veiculo,
+    vei.UrlVeiculo,
+    vei.PlacaEntrega,
+    lot.HoraSaidaPrevista,
+    lot.HoraRetornoPrevista,
+    ISNULL(SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END), 0) AS Pendente,
+    ISNULL(SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END), 0) AS Entregue,
+    ISNULL(SUM(CASE WHEN ent.StatusEntrega = 'Em Transporte' OR ent.StatusEntrega = 'EM_ROTA' THEN 1 ELSE 0 END), 0) AS EmTransporte,
     COUNT(ent.NumeroPedido) AS Total,
-    ISNULL(lot.Situacao, 'Em Aberto') AS SituacaoLote
-    FROM startapp_magicroute..Entregas ent
-    LEFT JOIN startapp_magicroute..Lotes lot ON lot.IDEmpresa = ent.IDEmpresa AND lot.IDLote = ent.IDLote
-    LEFT JOIN startapp_magicroute..Usuarios usr ON usr.IDEmpresa = ent.IDEmpresa AND usr.Codigo = ent.CodigoMotorista AND usr.TipoPessoa IN ('M', 'A/M')
-    ${filterQuery}
-    GROUP BY ent.IDLote, ent.LocalSaida, ent.LocalChegada, ent.DataEntrega, ent.Veiculo, ent.PlacaEntrega, ent.UrlVeiculo, ent.CodigoMotorista, ent.HoraSaidaPrevista, ent.HoraRetornoPrevista, usr.Nome, lot.Situacao`;
+    ISNULL(lot.Situacao, 'Em Aberto') AS SituacaoLote,
+    lot.StatusRoteirizacao
+    FROM startapp_magicroute..Lotes lot
+    LEFT JOIN startapp_magicroute..Usuarios u ON u.IDEmpresa = lot.IDEmpresa AND u.Codigo = CAST(lot.CodigoMotorista AS NVARCHAR)
+    LEFT JOIN startapp_magicroute..Veiculos vei ON vei.IdEmpresa = lot.IDEmpresa AND vei.CodigoVeiculo = lot.CodigoVeiculo
+    LEFT JOIN startapp_magicroute..Locais locSaida ON locSaida.IDEmpresa = lot.IDEmpresa AND locSaida.CodigoLocal = lot.CodigoLocalSaida
+    LEFT JOIN startapp_magicroute..Locais locChegada ON locChegada.IDEmpresa = lot.IDEmpresa AND locChegada.CodigoLocal = lot.CodigoLocalChegada
+    LEFT JOIN startapp_magicroute..LotesEntregas ent ON ent.IDEmpresa = lot.IDEmpresa AND ent.IDLote = lot.IDLote
+    WHERE ${whereConds.join(' AND ')}
+    GROUP BY lot.IDLote, lot.IDEmpresa, lot.DataLote, lot.CodigoMotorista, u.Nome, locSaida.NomeLocal, locChegada.NomeLocal, vei.Veiculo, vei.PlacaEntrega, vei.UrlVeiculo, lot.HoraSaidaPrevista, lot.HoraRetornoPrevista, lot.Situacao, lot.StatusRoteirizacao
+    ORDER BY lot.IDLote DESC`;
+
   await execAndRespond(query, res);
 });
 

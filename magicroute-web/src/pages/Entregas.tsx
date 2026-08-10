@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote, buscarConfiguracoes, finalizarLote, reabrirLote, listarMotoristas, alterarMotoristaLote } from '../services/api';
 import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload, XCircle } from 'lucide-react';
-import { adicionarGpsLog } from '../hooks/useGpsTracker';
+import { adicionarGpsLog, ativarModoPiP } from '../hooks/useGpsTracker';
 
 export default function Entregas() {
   const { user } = useAuth();
@@ -1084,6 +1084,11 @@ export default function Entregas() {
     adicionarGpsLog(`Abrindo app de navegação (${app}): ${url}`);
 
     if (isIOS || isAndroid) {
+      if (isAndroid) {
+        // Ativa o modo flutuante (PiP) imediatamente antes de trocar o foco para o Waze/Maps
+        ativarModoPiP();
+      }
+
       window.location.href = url;
       
       // Fallback temporizado de 1.5 segundos se o app não estiver instalado (a página continuará visível)
@@ -2976,6 +2981,30 @@ export default function Entregas() {
                 {entregaEmTransporte.NomeCliente || entregaEmTransporte.NOMECLIENTE || `Pedido ${entregaEmTransporte.NumeroPedido}`}
               </div>
             </div>
+
+            {/* Botão de Janela Flutuante (PiP) */}
+            {typeof window !== 'undefined' && (window as any).AndroidPip?.isPipSupported?.() && (
+              <button
+                id="btn-widget-pip"
+                onClick={() => ativarModoPiP()}
+                style={{
+                  background: 'rgba(140, 44, 245, 0.12)',
+                  border: '1px solid rgba(140, 44, 245, 0.3)',
+                  borderRadius: '8px',
+                  padding: '6px 10px',
+                  color: '#8c2cf5',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0,
+                }}
+                title="Minimizar para Janela Flutuante (PiP)"
+              >
+                🗗 Flutuante
+              </button>
+            )}
 
             {/* Botão de voltar ao app e finalizar */}
             <button

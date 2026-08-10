@@ -1,15 +1,15 @@
 import sql from 'mssql';
 
-// Configuração do SQL Server
-// Instância: TIDSCI_2022 (conforme informado pelo usuário)
+// Configuração flexível do SQL Server (Ambiente Dev & Produção VPS)
 const sqlConfig: sql.config = {
-  user: 'sa',
-  password: 'tid@125632',
-  server: 'localhost',
-  database: 'startapp_magicroute',
+  user: process.env.DB_USER || 'sa',
+  password: process.env.DB_PASSWORD || 'tid@125632',
+  server: process.env.DB_SERVER || 'localhost',
+  database: process.env.DB_NAME || 'startapp_magicroute',
+  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : undefined,
   options: {
-    instanceName: 'TIDSCI_2022',
-    encrypt: false,
+    ...(process.env.DB_INSTANCE ? { instanceName: process.env.DB_INSTANCE } : (!process.env.DB_SERVER || process.env.DB_SERVER === 'localhost' ? { instanceName: 'TIDSCI_2022' } : {})),
+    encrypt: process.env.DB_ENCRYPT === 'true',
     trustServerCertificate: true,
   },
   pool: {
