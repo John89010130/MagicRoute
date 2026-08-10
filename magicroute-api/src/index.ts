@@ -137,12 +137,12 @@ app.get('/BuscaEntregasData', async (req, res) => {
     lot.IDEmpresa,
     lot.DataLote AS DataEntrega,
     lot.CodigoMotorista,
-    u.Nome AS NomeMotorista,
-    locSaida.NomeLocal AS LocalSaida,
-    locChegada.NomeLocal AS LocalChegada,
-    vei.Veiculo,
-    vei.UrlVeiculo,
-    vei.PlacaEntrega,
+    MAX(u.Nome) AS NomeMotorista,
+    MAX(locSaida.NomeLocal) AS LocalSaida,
+    MAX(locChegada.NomeLocal) AS LocalChegada,
+    MAX(vei.Veiculo) AS Veiculo,
+    MAX(vei.UrlVeiculo) AS UrlVeiculo,
+    MAX(vei.PlacaEntrega) AS PlacaEntrega,
     lot.HoraSaidaPrevista,
     lot.HoraRetornoPrevista,
     ISNULL(SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END), 0) AS Pendente,
@@ -152,13 +152,13 @@ app.get('/BuscaEntregasData', async (req, res) => {
     ISNULL(lot.Situacao, 'Em Aberto') AS SituacaoLote,
     lot.StatusRoteirizacao
     FROM startapp_magicroute..Lotes lot
-    LEFT JOIN startapp_magicroute..Usuarios u ON u.IDEmpresa = lot.IDEmpresa AND u.Codigo = CAST(lot.CodigoMotorista AS NVARCHAR)
+    LEFT JOIN startapp_magicroute..Usuarios u ON u.IDEmpresa = lot.IDEmpresa AND u.Codigo = CAST(lot.CodigoMotorista AS NVARCHAR) AND u.TipoPessoa IN ('M', 'A/M')
     LEFT JOIN startapp_magicroute..Veiculos vei ON vei.IdEmpresa = lot.IDEmpresa AND vei.CodigoVeiculo = lot.CodigoVeiculo
     LEFT JOIN startapp_magicroute..Locais locSaida ON locSaida.IDEmpresa = lot.IDEmpresa AND locSaida.CodigoLocal = lot.CodigoLocalSaida
     LEFT JOIN startapp_magicroute..Locais locChegada ON locChegada.IDEmpresa = lot.IDEmpresa AND locChegada.CodigoLocal = lot.CodigoLocalChegada
     LEFT JOIN startapp_magicroute..LotesEntregas ent ON ent.IDEmpresa = lot.IDEmpresa AND ent.IDLote = lot.IDLote
     WHERE ${whereConds.join(' AND ')}
-    GROUP BY lot.IDLote, lot.IDEmpresa, lot.DataLote, lot.CodigoMotorista, u.Nome, locSaida.NomeLocal, locChegada.NomeLocal, vei.Veiculo, vei.PlacaEntrega, vei.UrlVeiculo, lot.HoraSaidaPrevista, lot.HoraRetornoPrevista, lot.Situacao, lot.StatusRoteirizacao
+    GROUP BY lot.IDLote, lot.IDEmpresa, lot.DataLote, lot.CodigoMotorista, lot.HoraSaidaPrevista, lot.HoraRetornoPrevista, lot.Situacao, lot.StatusRoteirizacao
     ORDER BY lot.IDLote DESC`;
 
   await execAndRespond(query, res);
