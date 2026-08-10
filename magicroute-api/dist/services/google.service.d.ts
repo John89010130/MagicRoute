@@ -7,5 +7,8 @@ export declare function getDirectionsETA(origin: {
 }, waypoints: {
     lat: number;
     lng: number;
-}[]): Promise<any>;
+}[], optimize?: boolean): Promise<{
+    legs: any;
+    waypoint_order: any;
+} | null>;
 //# sourceMappingURL=google.service.d.ts.map

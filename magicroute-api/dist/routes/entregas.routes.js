@@ -237,7 +237,7 @@ router.post('/roteirizar', async (req, res) => {
                 // FALLBACK: Roteirização Inteligente com Janelas de Tempo
                 // ══════════════════════════════════════════════════════════
                 // Buscar entregas com campos de janela de tempo
-                const queryGet = `SELECT le.IDEmpresa, le.IDLote, le.NrNotaFiscal, le.NumeroPedido,
+                const queryGet = `SELECT le.IDEmpresa, le.IDLote, le.NrNotaFiscal, le.NumeroPedido, le.SequenciaOriginal,
                             le.LatitudeEntrega, le.LongitudeEntrega, 
                             le.DataEntrega, le.DataEntregaExigida, le.HoraEntregaExigida,
                             le.HoraRecebimentoInicio1, le.HoraRecebimentoFim1,
@@ -288,6 +288,7 @@ router.post('/roteirizar', async (req, res) => {
                         .map((e) => ({
                         NrNotaFiscal: e.NrNotaFiscal || '',
                         NumeroPedido: e.NumeroPedido || '',
+                        SequenciaOriginal: Number(e.SequenciaOriginal || 0),
                         LatitudeEntrega: e.LatitudeEntrega || '0',
                         LongitudeEntrega: e.LongitudeEntrega || '0',
                         DataEntrega: e.DataEntrega || '',
@@ -301,7 +302,7 @@ router.post('/roteirizar', async (req, res) => {
                         lat: parseFloat(e.LatitudeEntrega || '0'),
                         lng: parseFloat(e.LongitudeEntrega || '0'),
                     }))
-                        .filter((p) => !isNaN(p.lat) && !isNaN(p.lng));
+                        .filter((p) => !isNaN(p.lat) && !isNaN(p.lng) && p.lat !== 0 && p.lng !== 0);
                     const semCoordenadas = entregasPendentes.filter((e) => {
                         const lat = parseFloat(e.LatitudeEntrega || '0');
                         const lng = parseFloat(e.LongitudeEntrega || '0');
@@ -310,10 +311,19 @@ router.post('/roteirizar', async (req, res) => {
                     if (pontosParaRoteirizar.length <= 1 && semCoordenadas.length === entregasPendentes.length) {
                         // Sem coordenadas válidas – atribuir sequência padrão
                         for (let i = 0; i < entregas.length; i++) {
-                            const nf = entregas[i].NrNotaFiscal || entregas[i].NumeroPedido || '';
+                            const nf = entregas[i].NrNotaFiscal || '';
+                            const ped = entregas[i].NumeroPedido || '';
+                            const seqOrig = entregas[i].SequenciaOriginal;
+                            let whereMatch = `IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}`;
+                            if (seqOrig) {
+                                whereMatch += ` AND SequenciaOriginal = ${seqOrig}`;
+                            }
+                            else {
+                                whereMatch += ` AND (NrNotaFiscal = '${nf}' OR NumeroPedido = '${ped}')`;
+                            }
                             await (0, database_1.executeQuery)(`UPDATE startapp_magicroute..LotesEntregas 
                                   SET SequenciaRoteirizada = ${i + 1} 
-                                  WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)} AND (NrNotaFiscal = '${nf}' OR NumeroPedido = '${nf}')`);
+                                  WHERE ${whereMatch}`);
                         }
                         mensagemSucesso = 'Roteirizado por ordem padrão (sem coordenadas suficientes).';
                     }
@@ -323,27 +333,57 @@ router.post('/roteirizar', async (req, res) => {
                         // Gravar sequências das entregas otimizadas
                         let seq = 1;
                         for (const p of rotaOtimizada) {
-                            const nf = p.NrNotaFiscal || p.NumeroPedido || '';
+                            const nf = p.NrNotaFiscal || '';
+                            const ped = p.NumeroPedido || '';
+                            const seqOrig = p.SequenciaOriginal ? Number(p.SequenciaOriginal) : null;
+                            let whereMatch = `IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}`;
+                            if (seqOrig !== null && seqOrig > 0) {
+                                whereMatch += ` AND SequenciaOriginal = ${seqOrig}`;
+                            }
+                            else if (nf && ped) {
+                                whereMatch += ` AND NrNotaFiscal = '${nf}' AND NumeroPedido = '${ped}'`;
+                            }
+                            else if (nf) {
+                                whereMatch += ` AND NrNotaFiscal = '${nf}'`;
+                            }
+                            else if (ped) {
+                                whereMatch += ` AND NumeroPedido = '${ped}'`;
+                            }
                             await (0, database_1.executeQuery)(`UPDATE startapp_magicroute..LotesEntregas 
                                   SET SequenciaRoteirizada = ${seq++} 
-                                  WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)} AND (NrNotaFiscal = '${nf}' OR NumeroPedido = '${nf}')`);
+                                  WHERE ${whereMatch}`);
                         }
                         // Entregas sem coordenadas: colocar no final
                         for (const e of semCoordenadas) {
-                            const nf = e.NrNotaFiscal || e.NumeroPedido || '';
-                            const jaOrdenada = rotaOtimizada.some(r => (r.NrNotaFiscal === nf) || (r.NumeroPedido === nf));
-                            if (!jaOrdenada) {
-                                await (0, database_1.executeQuery)(`UPDATE startapp_magicroute..LotesEntregas 
-                                    SET SequenciaRoteirizada = ${seq++} 
-                                    WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)} AND (NrNotaFiscal = '${nf}' OR NumeroPedido = '${nf}')`);
+                            const nf = e.NrNotaFiscal || '';
+                            const ped = e.NumeroPedido || '';
+                            const seqOrig = e.SequenciaOriginal;
+                            let whereMatch = `IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}`;
+                            if (seqOrig) {
+                                whereMatch += ` AND SequenciaOriginal = ${seqOrig}`;
                             }
+                            else {
+                                whereMatch += ` AND (NrNotaFiscal = '${nf}' OR NumeroPedido = '${ped}')`;
+                            }
+                            await (0, database_1.executeQuery)(`UPDATE startapp_magicroute..LotesEntregas 
+                                  SET SequenciaRoteirizada = ${seq++} 
+                                  WHERE ${whereMatch}`);
                         }
                         // Entregas concluídas: manter no final (não reordenar)
                         for (const e of entregasConcluidas) {
-                            const nf = e.NrNotaFiscal || e.NumeroPedido || '';
+                            const nf = e.NrNotaFiscal || '';
+                            const ped = e.NumeroPedido || '';
+                            const seqOrig = e.SequenciaOriginal;
+                            let whereMatch = `IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}`;
+                            if (seqOrig) {
+                                whereMatch += ` AND SequenciaOriginal = ${seqOrig}`;
+                            }
+                            else {
+                                whereMatch += ` AND (NrNotaFiscal = '${nf}' OR NumeroPedido = '${ped}')`;
+                            }
                             await (0, database_1.executeQuery)(`UPDATE startapp_magicroute..LotesEntregas 
                                   SET SequenciaRoteirizada = ${seq++} 
-                                  WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)} AND (NrNotaFiscal = '${nf}' OR NumeroPedido = '${nf}')`);
+                                  WHERE ${whereMatch}`);
                         }
                         mensagemSucesso = 'Roteirizado com sucesso pelo algoritmo inteligente (janelas de tempo).';
                     }
@@ -358,13 +398,13 @@ router.post('/roteirizar', async (req, res) => {
     // --- CÁLCULO DE ETA (Tempo Estimado) COM GOOGLE MAPS ---
     try {
         const entregasOrdenadas = await (0, database_1.executeQuery)(`
-      SELECT e.NrNotaFiscal, e.NumeroPedido, e.LatitudeEntrega, e.LongitudeEntrega, 
+      SELECT e.NrNotaFiscal, e.NumeroPedido, e.SequenciaOriginal, e.LatitudeEntrega, e.LongitudeEntrega, 
              e.HoraRecebimentoInicio1, e.HoraRecebimentoFim1, 
              e.HoraRecebimentoInicio2, e.HoraRecebimentoFim2,
              loc.Latitude as LatitudeLocalSaida, loc.Longitude as LongitudeLocalSaida, 
              locCheg.Latitude as LatitudeLocalChegada, locCheg.Longitude as LongitudeLocalChegada, 
              l.HoraSaidaPrevista 
-      FROM startapp_magicroute..Entregas e
+      FROM startapp_magicroute..LotesEntregas e
       INNER JOIN startapp_magicroute..Lotes l ON l.IDLote = e.IDLote AND l.IDEmpresa = e.IDEmpresa
       LEFT JOIN startapp_magicroute..Locais loc ON loc.CodigoLocal = l.CodigoLocalSaida AND loc.IDEmpresa = l.IDEmpresa
       LEFT JOIN startapp_magicroute..Locais locCheg ON locCheg.CodigoLocal = l.CodigoLocalChegada AND locCheg.IDEmpresa = l.IDEmpresa
@@ -381,7 +421,8 @@ router.post('/roteirizar', async (req, res) => {
                 const paradas = entregasOrdenadas.map((ent) => ({
                     lat: parseFloat(ent.LatitudeEntrega),
                     lng: parseFloat(ent.LongitudeEntrega),
-                    nf: ent.NrNotaFiscal || ent.NumeroPedido || ''
+                    nf: ent.NrNotaFiscal || ent.NumeroPedido || '',
+                    seqOrig: ent.SequenciaOriginal
                 })).filter((c) => !isNaN(c.lat) && !isNaN(c.lng) && c.lat !== 0 && c.lng !== 0);
                 if (paradas.length > 0) {
                     // Lidar com limite de 25 waypoints agrupando os requests (para simplificar, calculamos os primeiros 25)
@@ -390,7 +431,8 @@ router.post('/roteirizar', async (req, res) => {
                     const destination = paradas.length > 25
                         ? waypointsChunk[waypointsChunk.length - 1]
                         : { lat: latChegada, lng: lngChegada };
-                    const legs = await (0, google_service_1.getDirectionsETA)(origin, destination, waypointsChunk);
+                    const resGoogle = await (0, google_service_1.getDirectionsETA)(origin, destination, waypointsChunk);
+                    const legs = resGoogle?.legs || [];
                     if (legs && legs.length > 0) {
                         let dataBase = new Date();
                         const horaInicioRaw = req.body.HoraSaida || e.HoraSaidaPrevista || '08:00';
@@ -470,13 +512,21 @@ router.post('/roteirizar', async (req, res) => {
                                 const dataFormatada = `${dataBase.getFullYear()}-${(dataBase.getMonth() + 1).toString().padStart(2, '0')}-${dataBase.getDate().toString().padStart(2, '0')}`;
                                 const horaFormatada = `${dataBase.getHours().toString().padStart(2, '0')}:${dataBase.getMinutes().toString().padStart(2, '0')}`;
                                 const tempoFormatado = Math.floor(duracaoSegundos / 60) + ' min';
+                                const curItem = waypointsChunk[i];
+                                let whereMatch = `IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}`;
+                                if (curItem && curItem.seqOrig) {
+                                    whereMatch += ` AND SequenciaOriginal = ${Number(curItem.seqOrig)}`;
+                                }
+                                else {
+                                    whereMatch += ` AND (NrNotaFiscal = '${curItem.nf}' OR NumeroPedido = '${curItem.nf}')`;
+                                }
                                 await (0, database_1.executeQuery)(`
                   UPDATE startapp_magicroute..LotesEntregas 
                   SET TempoPrevistoEntrega = '${tempoFormatado}', 
                       DistanciaPrevista = ${distanciaKm}, 
                       DataEntregaPrevista = '${dataFormatada}', 
                       HoraEntregaPrevista = '${horaFormatada}'
-                  WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)} AND (NrNotaFiscal = '${waypointsChunk[i].nf}' OR NumeroPedido = '${waypointsChunk[i].nf}')
+                  WHERE ${whereMatch}
                 `);
                                 // Soma o tempo de atendimento antes de ir pra próxima parada
                                 dataBase.setSeconds(dataBase.getSeconds() + tempoAtendimentoSegundos);

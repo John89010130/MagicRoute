@@ -10,6 +10,7 @@
 export interface EntregaParaRoteirizar {
   NrNotaFiscal: string;
   NumeroPedido: string;
+  SequenciaOriginal?: number;
   LatitudeEntrega: string;
   LongitudeEntrega: string;
   DataEntrega: string;          // DD/MM/YYYY
