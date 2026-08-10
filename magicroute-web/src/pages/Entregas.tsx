@@ -838,29 +838,36 @@ export default function Entregas() {
     return `${m} min`;
   };
 
-  const fetchEntregas = async () => {
+  const fetchEntregas = async (silent: boolean = false) => {
     if (!user) return;
     if (!idLote) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const isAdm = user.tipoPessoaAtivo === 'Administrador';
       const result = await buscarEntregasPorLote(user.idEmpresa, isAdm ? '' : user.codigo, idLote);
-      setEntregas(result || []);
       
-      if (result && result.length > 0) {
-        const horaBanco = result[0].HoraSaidaPrevista || '';
+      const sorted = (result || []).sort((a: any, b: any) => {
+        const seqA = Number(a.SequenciaRoteirizada ?? a.SequenciaOriginal ?? 999);
+        const seqB = Number(b.SequenciaRoteirizada ?? b.SequenciaOriginal ?? 999);
+        return seqA - seqB;
+      });
+
+      setEntregas(sorted);
+      
+      if (sorted && sorted.length > 0) {
+        const horaBanco = sorted[0].HoraSaidaPrevista || '';
         setFormHoraSaida(horaBanco.substring(0, 5));
         
-        if (result[0].TempoAtendimento !== undefined && result[0].TempoAtendimento !== null) {
-          setFormTempoAtendimento(result[0].TempoAtendimento.toString());
+        if (sorted[0].TempoAtendimento !== undefined && sorted[0].TempoAtendimento !== null) {
+          setFormTempoAtendimento(sorted[0].TempoAtendimento.toString());
         }
 
-        setSelectedMotorista(String(result[0].CodigoMotorista || ''));
+        setSelectedMotorista(String(sorted[0].CodigoMotorista || ''));
 
-        const dataLoteBanco = result[0].DataLote || '';
+        const dataLoteBanco = sorted[0].DataLote || '';
         if (dataLoteBanco) {
           try {
             const isoDate = new Date(dataLoteBanco).toISOString().split('T')[0];
@@ -872,9 +879,9 @@ export default function Entregas() {
       }
     } catch (err) {
       console.error('Erro ao buscar entregas:', err);
-      setEntregas([]);
+      if (!silent) setEntregas([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -1356,7 +1363,7 @@ export default function Entregas() {
       
       await roteirizarLote(user.idEmpresa, idLote, '0', formHoraSaida, formTempoAtendimento, user.nomeUsuario);
       setIsRouteForced(true);
-      await fetchEntregas();
+      await fetchEntregas(true);
     } catch (err) {
       console.error('Erro ao atualizar sequencias:', err);
     }
