@@ -328,8 +328,24 @@ router.post('/roteirizar', async (req, res) => {
                         mensagemSucesso = 'Roteirizado por ordem padrão (sem coordenadas suficientes).';
                     }
                     else {
-                        // ═══ NOVO ALGORITMO: Roteirização por Janelas de Tempo ═══
-                        const rotaOtimizada = (0, routing_service_1.ordenarPorJanelasDeTempo)(pontosParaRoteirizar, horaSaidaConfig, tempoAtendimentoMin, origemLat, origemLng);
+                        // ═══ ROTEIRIZAÇÃO NATIVA GOOGLE MAPS (DIRECTIONS API TSP) ═══
+                        let rotaOtimizada = [];
+                        const origin = { lat: origemLat, lng: origemLng };
+                        const destination = { lat: origemLat, lng: origemLng };
+                        const waypoints = pontosParaRoteirizar.map(p => ({ lat: p.lat, lng: p.lng }));
+                        try {
+                            const resGoogleTSP = await (0, google_service_1.getDirectionsETA)(origin, destination, waypoints, true);
+                            if (resGoogleTSP && resGoogleTSP.waypoint_order && resGoogleTSP.waypoint_order.length > 0) {
+                                rotaOtimizada = resGoogleTSP.waypoint_order.map((idx) => pontosParaRoteirizar[idx]);
+                                console.log('[GOOGLE MAPS TSP] Rota ordenada com sucesso via Google Maps API:', resGoogleTSP.waypoint_order);
+                            }
+                        }
+                        catch (gErr) {
+                            console.warn('[GOOGLE MAPS TSP] Erro ao chamar Google TSP, executando fallback local:', gErr.message);
+                        }
+                        if (rotaOtimizada.length === 0) {
+                            rotaOtimizada = (0, routing_service_1.ordenarPorJanelasDeTempo)(pontosParaRoteirizar, horaSaidaConfig, tempoAtendimentoMin, origemLat, origemLng);
+                        }
                         // Gravar sequências das entregas otimizadas
                         let seq = 1;
                         for (const p of rotaOtimizada) {

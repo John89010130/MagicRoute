@@ -345,14 +345,32 @@ router.post('/roteirizar', async (req: Request, res: Response) => {
             }
             mensagemSucesso = 'Roteirizado por ordem padrão (sem coordenadas suficientes).';
           } else {
-            // ═══ NOVO ALGORITMO: Roteirização por Janelas de Tempo ═══
-            const rotaOtimizada = ordenarPorJanelasDeTempo(
-              pontosParaRoteirizar,
-              horaSaidaConfig,
-              tempoAtendimentoMin,
-              origemLat,
-              origemLng
-            );
+            // ═══ ROTEIRIZAÇÃO NATIVA GOOGLE MAPS (DIRECTIONS API TSP) ═══
+            let rotaOtimizada: EntregaParaRoteirizar[] = [];
+            
+            const origin = { lat: origemLat, lng: origemLng };
+            const destination = { lat: origemLat, lng: origemLng };
+            const waypoints = pontosParaRoteirizar.map(p => ({ lat: p.lat, lng: p.lng }));
+
+            try {
+              const resGoogleTSP = await getDirectionsETA(origin, destination, waypoints, true);
+              if (resGoogleTSP && resGoogleTSP.waypoint_order && resGoogleTSP.waypoint_order.length > 0) {
+                rotaOtimizada = resGoogleTSP.waypoint_order.map((idx: number) => pontosParaRoteirizar[idx]);
+                console.log('[GOOGLE MAPS TSP] Rota ordenada com sucesso via Google Maps API:', resGoogleTSP.waypoint_order);
+              }
+            } catch (gErr: any) {
+              console.warn('[GOOGLE MAPS TSP] Erro ao chamar Google TSP, executando fallback local:', gErr.message);
+            }
+
+            if (rotaOtimizada.length === 0) {
+              rotaOtimizada = ordenarPorJanelasDeTempo(
+                pontosParaRoteirizar,
+                horaSaidaConfig,
+                tempoAtendimentoMin,
+                origemLat,
+                origemLng
+              );
+            }
 
             // Gravar sequências das entregas otimizadas
             let seq = 1;
