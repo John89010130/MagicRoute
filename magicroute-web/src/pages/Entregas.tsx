@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote, buscarConfiguracoes, finalizarLote, reabrirLote, listarMotoristas, alterarMotoristaLote } from '../services/api';
-import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload, XCircle, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 import { adicionarGpsLog, ativarModoPiP } from '../hooks/useGpsTracker';
 
 export default function Entregas() {
@@ -1341,33 +1341,13 @@ export default function Entregas() {
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-    (e.currentTarget as HTMLElement).style.opacity = '0.4';
-  };
+  const draggedIndexRef = useRef<number | null>(null);
 
-  const handleDragOver = (e: React.DragEvent, overIndex: number) => {
-    e.preventDefault();
-    if (draggedIndex === null || draggedIndex === overIndex) return;
-
-    const listCopy = [...entregas];
-    const draggedItem = listCopy[draggedIndex];
-    listCopy.splice(draggedIndex, 1);
-    listCopy.splice(overIndex, 0, draggedItem);
-    
-    setDraggedIndex(overIndex);
-    setEntregas(listCopy);
-  };
-
-  const handleDragEnd = async (e: React.DragEvent) => {
-    (e.currentTarget as HTMLElement).style.opacity = '1';
-    setDraggedIndex(null);
-
+  const salvarNovaOrdem = async (novaLista: any[]) => {
     if (!user || !idLote) return;
     try {
       await Promise.all(
-        entregas.map((entrega, idx) => {
+        novaLista.map((entrega, idx) => {
           const nf = entrega.NrNotaFiscal || entrega.NRDOCUMENTO || '';
           const pedido = entrega.NumeroPedido || '';
           return atualizarSequencia(user.idEmpresa, idLote, nf, idx + 1, pedido);
@@ -1376,11 +1356,59 @@ export default function Entregas() {
       
       await roteirizarLote(user.idEmpresa, idLote, '0', formHoraSaida, formTempoAtendimento, user.nomeUsuario);
       setIsRouteForced(true);
-      
       await fetchEntregas();
     } catch (err) {
       console.error('Erro ao atualizar sequencias:', err);
     }
+  };
+
+  const handleMoveUp = async (index: number) => {
+    if (index <= 0) return;
+    const listCopy = [...entregas];
+    const item = listCopy[index];
+    listCopy.splice(index, 1);
+    listCopy.splice(index - 1, 0, item);
+    setEntregas(listCopy);
+    await salvarNovaOrdem(listCopy);
+  };
+
+  const handleMoveDown = async (index: number) => {
+    if (index >= entregas.length - 1) return;
+    const listCopy = [...entregas];
+    const item = listCopy[index];
+    listCopy.splice(index, 1);
+    listCopy.splice(index + 1, 0, item);
+    setEntregas(listCopy);
+    await salvarNovaOrdem(listCopy);
+  };
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    draggedIndexRef.current = index;
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    (e.currentTarget as HTMLElement).style.opacity = '0.4';
+  };
+
+  const handleDragOver = (e: React.DragEvent, overIndex: number) => {
+    e.preventDefault();
+    const fromIndex = draggedIndexRef.current;
+    if (fromIndex === null || fromIndex === overIndex) return;
+
+    const listCopy = [...entregas];
+    const draggedItem = listCopy[fromIndex];
+    listCopy.splice(fromIndex, 1);
+    listCopy.splice(overIndex, 0, draggedItem);
+    
+    draggedIndexRef.current = overIndex;
+    setDraggedIndex(overIndex);
+    setEntregas(listCopy);
+  };
+
+  const handleDragEnd = async (e: React.DragEvent) => {
+    (e.currentTarget as HTMLElement).style.opacity = '1';
+    setDraggedIndex(null);
+    draggedIndexRef.current = null;
+    await salvarNovaOrdem(entregas);
   };
 
   const getStatusBadge = (status: string) => {
@@ -2251,8 +2279,57 @@ export default function Entregas() {
                             background: draggedIndex === idx ? '#f8f9fe' : '#ffffff'
                           }}
                         >
-                          <td style={{ padding: '14px 8px', fontSize: '0.85rem', fontWeight: 700, color: '#495057' }}>
-                            {ent.SequenciaRoteirizada || ent.SequenciaOriginal || idx + 1}
+                          <td style={{ padding: '10px 8px', fontSize: '0.85rem', fontWeight: 700, color: '#495057' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {isAdm && !isEntregue && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleMoveUp(idx); }}
+                                    disabled={idx === 0}
+                                    title="Mover para cima"
+                                    style={{
+                                      border: 'none',
+                                      background: 'transparent',
+                                      cursor: idx === 0 ? 'default' : 'pointer',
+                                      opacity: idx === 0 ? 0.2 : 0.7,
+                                      padding: 0,
+                                      display: 'flex'
+                                    }}
+                                  >
+                                    <ArrowUp size={12} color="#8c2cf5" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleMoveDown(idx); }}
+                                    disabled={idx === entregas.length - 1}
+                                    title="Mover para baixo"
+                                    style={{
+                                      border: 'none',
+                                      background: 'transparent',
+                                      cursor: idx === entregas.length - 1 ? 'default' : 'pointer',
+                                      opacity: idx === entregas.length - 1 ? 0.2 : 0.7,
+                                      padding: 0,
+                                      display: 'flex'
+                                    }}
+                                  >
+                                    <ArrowDown size={12} color="#8c2cf5" />
+                                  </button>
+                                </div>
+                              )}
+                              <span style={{
+                                background: '#8c2cf5',
+                                color: '#ffffff',
+                                borderRadius: '50%',
+                                width: '24px',
+                                height: '24px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.78rem',
+                                fontWeight: 700
+                              }}>
+                                {idx + 1}
+                              </span>
+                            </div>
                           </td>
                           <td style={{ padding: '14px 8px', fontSize: '0.85rem', fontWeight: 600 }}>{ent.NumeroPedido || 'N/A'}</td>
                           <td style={{ padding: '14px 8px', fontSize: '0.85rem', color: '#495057' }}>{ent.NrNotaFiscal || 'N/A'}</td>
