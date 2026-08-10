@@ -66,26 +66,7 @@ export default function Entregas() {
   // Estado de entrega ativa para widget flutuante
   const [entregaEmTransporte, setEntregaEmTransporte] = useState<any>(null);
 
-  // Debugger console states
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [showDebugConsole, setShowDebugConsole] = useState(false);
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('gps_debug_logs');
-      if (saved) {
-        setDebugLogs(JSON.parse(saved));
-      }
-    } catch (e) {}
-
-    const handleLogAdded = () => {
-      const win = window as any;
-      setDebugLogs([...(win._gpsLogs || [])]);
-    };
-
-    window.addEventListener('gps-log-added', handleLogAdded);
-    return () => window.removeEventListener('gps-log-added', handleLogAdded);
-  }, []);
 
   // States para Importação de Planilha
   const [showImportModal, setShowImportModal] = useState(false);
