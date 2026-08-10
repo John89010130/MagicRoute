@@ -66,7 +66,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onPause() {
+    public void onPause() {
         super.onPause();
         // Quando o Waze/Maps é aberto por Intent, a Activity entra em onPause()
         // Aciona o modo PiP para manter o MagicRoute flutuando sobre o Waze/Maps
