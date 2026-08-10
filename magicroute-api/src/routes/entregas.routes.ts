@@ -48,10 +48,10 @@ router.get('/por-data', async (req: Request, res: Response) => {
     MAX(vei.PlacaEntrega) AS PlacaEntrega,
     lot.HoraSaidaPrevista,
     lot.HoraRetornoPrevista,
-    ISNULL(SUM(CASE WHEN ent.StatusEntrega = 'Pendente' THEN 1 ELSE 0 END), 0) AS Pendente,
-    ISNULL(SUM(CASE WHEN ent.StatusEntrega = 'Entregue' THEN 1 ELSE 0 END), 0) AS Entregue,
-    ISNULL(SUM(CASE WHEN ent.StatusEntrega = 'Em Transporte' OR ent.StatusEntrega = 'EM_ROTA' THEN 1 ELSE 0 END), 0) AS EmTransporte,
-    COUNT(ent.NumeroPedido) AS Total,
+    COUNT(DISTINCT CASE WHEN ent.StatusEntrega = 'Pendente' THEN ent.NumeroPedido END) AS Pendente,
+    COUNT(DISTINCT CASE WHEN ent.StatusEntrega = 'Entregue' THEN ent.NumeroPedido END) AS Entregue,
+    COUNT(DISTINCT CASE WHEN ent.StatusEntrega = 'Em Transporte' OR ent.StatusEntrega = 'EM_ROTA' THEN ent.NumeroPedido END) AS EmTransporte,
+    COUNT(DISTINCT ent.NumeroPedido) AS Total,
     ISNULL(lot.Situacao, 'Em Aberto') AS SituacaoLote,
     lot.StatusRoteirizacao
     FROM startapp_magicroute..Lotes lot
