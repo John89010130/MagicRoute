@@ -14,46 +14,75 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setupPipBridge();
+    }
 
-        // Registra a interface de ponte JavaScript -> Android (window.AndroidPip)
-        if (bridge != null && bridge.getWebView() != null) {
-            bridge.getWebView().addJavascriptInterface(new Object() {
-                @JavascriptInterface
-                public void setDeliveryActive(final boolean active) {
-                    isDeliveryActive = active;
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                try {
-                                    PictureInPictureParams params = new PictureInPictureParams.Builder()
-                                            .setAutoEnterEnabled(active)
-                                            .setAspectRatio(new Rational(16, 9))
-                                            .build();
-                                    setPictureInPictureParams(params);
-                                } catch (Exception e) {
-                                    e.printStackTrace();
-                                }
-                            }
-                        });
-                    }
-                }
+    @Override
+    public void onStart() {
+        super.onStart();
+        setupPipBridge();
+    }
 
-                @JavascriptInterface
-                public void enterPiP() {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            enterPipModeInternal();
+    @Override
+    public void onResume() {
+        super.onResume();
+        setupPipBridge();
+    }
+
+    private void setupPipBridge() {
+        try {
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().post(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            bridge.getWebView().addJavascriptInterface(new AndroidPipInterface(), "AndroidPip");
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
-                    });
-                }
+                    }
+                });
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
-                @JavascriptInterface
-                public boolean isPipSupported() {
-                    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O;
+    public class AndroidPipInterface {
+        @JavascriptInterface
+        public void setDeliveryActive(final boolean active) {
+            isDeliveryActive = active;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            PictureInPictureParams params = new PictureInPictureParams.Builder()
+                                    .setAutoEnterEnabled(active)
+                                    .setAspectRatio(new Rational(16, 9))
+                                    .build();
+                            setPictureInPictureParams(params);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            }
+        }
+
+        @JavascriptInterface
+        public void enterPiP() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    enterPipModeInternal();
                 }
-            }, "AndroidPip");
+            });
+        }
+
+        @JavascriptInterface
+        public boolean isPipSupported() {
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O;
         }
     }
 
