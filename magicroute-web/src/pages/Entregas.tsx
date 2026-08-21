@@ -1380,7 +1380,7 @@ export default function Entregas() {
         );
       }
       
-      // Se houve uma nova movimentação do usuário enquanto salvava, aborta para não sobrescrever a tela com requisição antiga
+      // Se houve uma nova movimentação do usuário enquanto salvava, aborta
       if (saveVersionRef.current !== currentVersion) return;
 
       await roteirizarLote(user.idEmpresa, idLote, '0', formHoraSaida, formTempoAtendimento, user.nomeUsuario);
@@ -1388,7 +1388,44 @@ export default function Entregas() {
       if (saveVersionRef.current !== currentVersion) return;
 
       setIsRouteForced(true);
-      await fetchEntregas(true);
+
+      // Em vez de refazer o fetch no banco e arriscar ler a view antes da sincronização do SQL Server,
+      // buscamos os dados novos e mesclamos os ETAs mantendo a ordem exata da lista do usuário
+      try {
+        const isAdm = user.tipoPessoaAtivo === 'Administrador';
+        const result = await buscarEntregasPorLote(user.idEmpresa, isAdm ? '' : user.codigo, idLote);
+        
+        if (saveVersionRef.current !== currentVersion) return;
+
+        if (Array.isArray(result) && result.length > 0) {
+          const mapNovosDados = new Map();
+          result.forEach((item: any) => {
+            const key = item.SequenciaOriginal || item.NrNotaFiscal || item.NumeroPedido;
+            if (key) mapNovosDados.set(String(key), item);
+          });
+
+          // Atualizar horários previstos/ETAs mantendo a posição exata da tela
+          const listaAtualizada = entregasRef.current.map((ent: any) => {
+            const key = ent.SequenciaOriginal || ent.NrNotaFiscal || ent.NumeroPedido;
+            const novo = mapNovosDados.get(String(key));
+            if (novo) {
+              return {
+                ...ent,
+                HoraEntregaPrevista: novo.HoraEntregaPrevista || ent.HoraEntregaPrevista,
+                TempoPrevistoEntrega: novo.TempoPrevistoEntrega || ent.TempoPrevistoEntrega,
+                DistanciaPrevista: novo.DistanciaPrevista || ent.DistanciaPrevista,
+                DataEntregaPrevista: novo.DataEntregaPrevista || ent.DataEntregaPrevista
+              };
+            }
+            return ent;
+          });
+
+          entregasRef.current = listaAtualizada;
+          setEntregas([...listaAtualizada]);
+        }
+      } catch (e) {
+        console.warn('Erro ao atualizar ETAs em segundo plano:', e);
+      }
     } catch (err) {
       console.error('Erro ao atualizar sequencias:', err);
     }
