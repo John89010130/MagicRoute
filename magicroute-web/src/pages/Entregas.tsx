@@ -1404,20 +1404,27 @@ export default function Entregas() {
             if (key) mapNovosDados.set(String(key), item);
           });
 
-          // Atualizar horários previstos/ETAs mantendo a posição exata da tela
+          // Atualizar horários previstos/ETAs e totais do lote mantendo a posição exata da tela
+          const horaSaidaLote = result[0]?.HoraSaidaPrevista;
+          const horaRetornoLote = result[0]?.HoraRetornoPrevista;
+
           const listaAtualizada = entregasRef.current.map((ent: any) => {
             const key = ent.SequenciaOriginal || ent.NrNotaFiscal || ent.NumeroPedido;
             const novo = mapNovosDados.get(String(key));
-            if (novo) {
-              return {
-                ...ent,
-                HoraEntregaPrevista: novo.HoraEntregaPrevista || ent.HoraEntregaPrevista,
-                TempoPrevistoEntrega: novo.TempoPrevistoEntrega || ent.TempoPrevistoEntrega,
-                DistanciaPrevista: novo.DistanciaPrevista || ent.DistanciaPrevista,
-                DataEntregaPrevista: novo.DataEntregaPrevista || ent.DataEntregaPrevista
-              };
-            }
-            return ent;
+            const base = novo ? {
+              ...ent,
+              HoraEntregaPrevista: novo.HoraEntregaPrevista || ent.HoraEntregaPrevista,
+              TempoPrevistoEntrega: novo.TempoPrevistoEntrega || ent.TempoPrevistoEntrega,
+              DistanciaPrevista: novo.DistanciaPrevista || ent.DistanciaPrevista,
+              DataEntregaPrevista: novo.DataEntregaPrevista || ent.DataEntregaPrevista,
+              HoraSaidaPrevista: novo.HoraSaidaPrevista || ent.HoraSaidaPrevista,
+              HoraRetornoPrevista: novo.HoraRetornoPrevista || ent.HoraRetornoPrevista
+            } : ent;
+
+            if (horaSaidaLote) base.HoraSaidaPrevista = horaSaidaLote;
+            if (horaRetornoLote) base.HoraRetornoPrevista = horaRetornoLote;
+
+            return base;
           });
 
           entregasRef.current = listaAtualizada;
