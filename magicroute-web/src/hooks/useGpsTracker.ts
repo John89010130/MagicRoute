@@ -50,12 +50,17 @@ export const setEntregaAtivaPiP = (ativa: boolean) => {
 };
 
 export const ativarModoPiP = () => {
-  if (typeof window !== 'undefined' && (window as any).AndroidPip?.enterPiP) {
-    try {
-      (window as any).AndroidPip.enterPiP();
-      adicionarGpsLog('Modo Picture-in-Picture acionado via JS.');
-      return true;
-    } catch (e) {}
+  if (typeof window !== 'undefined') {
+    setEntregaAtivaPiP(true);
+    if ((window as any).AndroidPip?.enterPiP) {
+      try {
+        (window as any).AndroidPip.enterPiP();
+        adicionarGpsLog('Modo Picture-in-Picture acionado via JS.');
+        return true;
+      } catch (e: any) {
+        adicionarGpsLog(`Erro ao ativar PiP via JS: ${e.message}`);
+      }
+    }
   }
   return false;
 };

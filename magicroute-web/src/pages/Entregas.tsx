@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buscarEntregasPorLote, roteirizarLote, salvarHoraSaidaLote, salvarTempoAtendimentoLote, salvarDataLote, gravarEvento, atualizarSequencia, adicionarEntrega, editarEntrega, excluirEntrega, criarLog, buscarLogs, buscarPontosGPS, importarEntregasLote, buscarConfiguracoes, finalizarLote, reabrirLote, listarMotoristas, alterarMotoristaLote } from '../services/api';
 import { ArrowLeft, Check, Navigation, Package, RefreshCw, Loader2, List, MapPin, CheckCircle2, RotateCcw, Edit, Trash2, Printer, Plus, Compass, History, Upload, XCircle, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
-import { adicionarGpsLog, ativarModoPiP } from '../hooks/useGpsTracker';
+import { adicionarGpsLog, ativarModoPiP, setEntregaAtivaPiP } from '../hooks/useGpsTracker';
 
 export default function Entregas() {
   const { user } = useAuth();
@@ -1110,23 +1110,27 @@ export default function Entregas() {
 
     if (isIOS || isAndroid) {
       if (isAndroid) {
-        // Ativa o modo flutuante (PiP) imediatamente antes de trocar o foco para o Waze/Maps
+        // Ativa o sinal de entrega ativa e o modo flutuante (PiP) para o Android 13
+        setEntregaAtivaPiP(true);
         ativarModoPiP();
       }
 
-      window.location.href = url;
+      // Buffer de 250ms no Android para permitir que a janela PiP/Overlay assuma o topo antes do Intent do Waze/Maps
+      setTimeout(() => {
+        window.location.href = url;
+      }, isAndroid ? 250 : 0);
       
-      // Fallback temporizado de 1.5 segundos se o app não estiver instalado (a página continuará visível)
+      // Fallback temporizado de 2 segundos se o app não estiver instalado
       const tStart = Date.now();
       setTimeout(() => {
-        if (!document.hidden && Date.now() - tStart < 2200) {
+        if (!document.hidden && Date.now() - tStart < 2500) {
           adicionarGpsLog('App nativo não respondeu. Abrindo link web/fallback.');
           const webUrl = app === 'waze'
             ? (hasCoords ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes` : `https://waze.com/ul?q=${encodeURIComponent(endereco)}&navigate=yes`)
             : (hasCoords ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving` : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(endereco)}&travelmode=driving`);
           window.location.href = webUrl;
         }
-      }, 1500);
+      }, 1800);
     } else {
       window.open(url, '_blank');
     }
