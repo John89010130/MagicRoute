@@ -182,16 +182,45 @@ export default function Mapa() {
   };
 
   const getGpsPathsByDelivery = () => {
-    const paths: Record<string, { lat: number; lng: number }[]> = {};
+    const paths: Record<string, { lat: number; lng: number }[][]> = {};
+    
+    // Agrupar por NumeroPedido
+    const byPedido: Record<string, any[]> = {};
     gpsPoints.forEach(pt => {
-      const ped = pt.NumeroPedido || 'Desconhecido';
-      const lat = Number(pt.Latitude);
-      const lng = Number(pt.Longitude);
-      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-        if (!paths[ped]) paths[ped] = [];
-        paths[ped].push({ lat, lng });
+      const ped = String(pt.NumeroPedido || 'Desconhecido');
+      if (!byPedido[ped]) byPedido[ped] = [];
+      byPedido[ped].push(pt);
+    });
+
+    // Para cada pedido, separar em segmentos se houver salto de localização > ~1km
+    Object.entries(byPedido).forEach(([ped, pts]) => {
+      paths[ped] = [];
+      let currentSegment: { lat: number; lng: number }[] = [];
+
+      pts.forEach(pt => {
+        const lat = Number(pt.Latitude);
+        const lng = Number(pt.Longitude);
+        if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+          if (currentSegment.length > 0) {
+            const last = currentSegment[currentSegment.length - 1];
+            const dLat = Math.abs(last.lat - lat);
+            const dLng = Math.abs(last.lng - lng);
+            if (dLat > 0.008 || dLng > 0.008) {
+              if (currentSegment.length > 0) {
+                paths[ped].push(currentSegment);
+              }
+              currentSegment = [];
+            }
+          }
+          currentSegment.push({ lat, lng });
+        }
+      });
+
+      if (currentSegment.length > 0) {
+        paths[ped].push(currentSegment);
       }
     });
+
     return paths;
   };
 
@@ -223,6 +252,7 @@ export default function Mapa() {
 
   const getDriverCurrentLocation = () => {
     if (gpsPoints.length === 0) return null;
+
     const sortedPoints = [...gpsPoints].sort((a, b) => {
       const idA = Number(a.ID || a.id || 0);
       const idB = Number(b.ID || b.id || 0);
@@ -232,6 +262,19 @@ export default function Mapa() {
       const t2 = parseGpsDate(b.DataRegistroISO || b.DataRegistro || b.dataRegistro);
       return t1 - t2;
     });
+
+    // Se houver uma entrega em transporte/ativa, buscar a localização mais recente desse pedido específico
+    const inTransit = entregas.find(ent => {
+      const status = (ent.StatusEntrega || ent.STATUSENTREGA || ent.situacaoentrega || '').toLowerCase();
+      return status.includes('transporte');
+    });
+
+    if (inTransit) {
+      const numPedActive = String(inTransit.NumeroPedido || inTransit.NUMEROPEDIDO || '');
+      const matchForActive = [...sortedPoints].reverse().find(pt => String(pt.NumeroPedido) === numPedActive);
+      if (matchForActive) return matchForActive;
+    }
+
     return sortedPoints[sortedPoints.length - 1];
   };
 
@@ -463,12 +506,12 @@ export default function Mapa() {
           })}
 
           {/* Renderizar trajeto do GPS real realizado pelo motorista */}
-          {showRealPath && Object.entries(getGpsPathsByDelivery()).map(([pedido, path], idx) => {
+          {showRealPath && Object.entries(getGpsPathsByDelivery()).map(([pedido, segments]) => {
             const color = getDeliveryColor(pedido);
             const isHovered = hoveredDelivery === pedido;
-            return (
+            return segments.map((path, segIdx) => (
               <PolylineF
-                key={pedido}
+                key={`${pedido}-${segIdx}`}
                 path={path}
                 onClick={(e) => {
                   setClickedPolyline({
@@ -495,7 +538,7 @@ export default function Mapa() {
                   }] : undefined
                 }}
               />
-            );
+            ));
           })}
 
           {/* Linha dinâmica conectando o motorista à entrega ativa (Estilo Uber/iFood) */}
