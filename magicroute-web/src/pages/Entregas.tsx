@@ -13,6 +13,7 @@ export default function Entregas() {
   const idLote = searchParams.get('idLote') || '';
 
   const [entregas, setEntregas] = useState<any[]>([]);
+  const entregasRef = useRef<any[]>([]);
   const [permiteRoteirizar, setPermiteRoteirizar] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -736,7 +737,6 @@ export default function Entregas() {
     window.print();
   };
 
-  const entregasRef = useRef(entregas);
   useEffect(() => {
     entregasRef.current = entregas;
   }, [entregas]);
@@ -836,6 +836,7 @@ export default function Entregas() {
         return seqA - seqB;
       });
 
+      entregasRef.current = sorted;
       setEntregas(sorted);
       
       if (sorted && sorted.length > 0) {
@@ -860,7 +861,10 @@ export default function Entregas() {
       }
     } catch (err) {
       console.error('Erro ao buscar entregas:', err);
-      if (!silent) setEntregas([]);
+      if (!silent) {
+        entregasRef.current = [];
+        setEntregas([]);
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -1334,6 +1338,9 @@ export default function Entregas() {
   const salvarNovaOrdem = async (novaLista: any[]) => {
     if (!user || !idLote) return;
     try {
+      entregasRef.current = novaLista;
+      setEntregas([...novaLista]);
+
       await Promise.all(
         novaLista.map((entrega, idx) => {
           const nf = entrega.NrNotaFiscal || entrega.NRDOCUMENTO || '';
@@ -1352,20 +1359,22 @@ export default function Entregas() {
 
   const handleMoveUp = async (index: number) => {
     if (index <= 0) return;
-    const listCopy = [...entregas];
+    const listCopy = [...entregasRef.current];
     const item = listCopy[index];
     listCopy.splice(index, 1);
     listCopy.splice(index - 1, 0, item);
+    entregasRef.current = listCopy;
     setEntregas(listCopy);
     await salvarNovaOrdem(listCopy);
   };
 
   const handleMoveDown = async (index: number) => {
-    if (index >= entregas.length - 1) return;
-    const listCopy = [...entregas];
+    if (index >= entregasRef.current.length - 1) return;
+    const listCopy = [...entregasRef.current];
     const item = listCopy[index];
     listCopy.splice(index, 1);
     listCopy.splice(index + 1, 0, item);
+    entregasRef.current = listCopy;
     setEntregas(listCopy);
     await salvarNovaOrdem(listCopy);
   };
@@ -1382,13 +1391,16 @@ export default function Entregas() {
     const fromIndex = draggedIndexRef.current;
     if (fromIndex === null || fromIndex === overIndex) return;
 
-    const listCopy = [...entregas];
+    const listCopy = [...entregasRef.current];
     const draggedItem = listCopy[fromIndex];
+    if (!draggedItem) return;
+
     listCopy.splice(fromIndex, 1);
     listCopy.splice(overIndex, 0, draggedItem);
     
     draggedIndexRef.current = overIndex;
     setDraggedIndex(overIndex);
+    entregasRef.current = listCopy;
     setEntregas(listCopy);
   };
 
@@ -1396,7 +1408,8 @@ export default function Entregas() {
     (e.currentTarget as HTMLElement).style.opacity = '1';
     setDraggedIndex(null);
     draggedIndexRef.current = null;
-    await salvarNovaOrdem(entregas);
+    const listaFinal = [...entregasRef.current];
+    await salvarNovaOrdem(listaFinal);
   };
 
   const getStatusBadge = (status: string) => {

@@ -355,7 +355,7 @@ app.post('/AtualizaSequencia', async (req, res) => {
     try {
         let whereMatch = '';
         if (cleanNF && cleanPedido) {
-            whereMatch = `AND (NrNotaFiscal = '${cleanNF}' OR NumeroPedido = '${cleanPedido}')`;
+            whereMatch = `AND NrNotaFiscal = '${cleanNF}' AND NumeroPedido = '${cleanPedido}'`;
         }
         else if (cleanNF) {
             whereMatch = `AND NrNotaFiscal = '${cleanNF}'`;
