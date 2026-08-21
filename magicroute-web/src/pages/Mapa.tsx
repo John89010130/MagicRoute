@@ -211,11 +211,24 @@ export default function Mapa() {
     return colors[idx % colors.length];
   };
 
+  const parseGpsDate = (dateVal: any) => {
+    if (!dateVal) return 0;
+    if (typeof dateVal === 'number') return dateVal;
+    let str = String(dateVal).trim();
+    if (str.includes(' ')) str = str.replace(' ', 'T');
+    const t = new Date(str).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+
   const getDriverCurrentLocation = () => {
     if (gpsPoints.length === 0) return null;
     const sortedPoints = [...gpsPoints].sort((a, b) => {
-      const t1 = new Date(a.DataRegistro || a.dataRegistro || 0).getTime();
-      const t2 = new Date(b.DataRegistro || b.dataRegistro || 0).getTime();
+      const idA = Number(a.ID || a.id || 0);
+      const idB = Number(b.ID || b.id || 0);
+      if (idA > 0 && idB > 0) return idA - idB;
+
+      const t1 = parseGpsDate(a.DataRegistroISO || a.DataRegistro || a.dataRegistro);
+      const t2 = parseGpsDate(b.DataRegistroISO || b.DataRegistro || b.dataRegistro);
       return t1 - t2;
     });
     return sortedPoints[sortedPoints.length - 1];

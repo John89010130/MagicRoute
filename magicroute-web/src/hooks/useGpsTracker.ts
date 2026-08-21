@@ -178,30 +178,55 @@ export function useGpsTracker() {
       }
     }
 
+    let idEmp = idEmpresaRef.current;
+    let idLot = idLoteRef.current;
+    let numPed = numeroPedidoRef.current;
+
+    if (!idEmp || !idLot || !numPed) {
+      try {
+        const saved = localStorage.getItem('gps_tracking_active');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          idEmp = idEmp || parsed.idEmpresa;
+          idLot = idLot || parsed.idLote;
+          numPed = numPed || parsed.numeroPedido;
+        }
+      } catch (e) {}
+    }
+
+    if (!idEmp || !idLot || !numPed) {
+      adicionarGpsLog(`Ponto GPS ignorado: idEmpresa (${idEmp}), idLote (${idLot}), numeroPedido (${numPed}) incompletos.`);
+      return;
+    }
+
     lastCoordsRef.current = { latitude, longitude, timestamp: Date.now() };
 
-    // Encapsular o ponto na fila offline
-    const novoPonto = {
-      idEmpresa: idEmpresaRef.current,
-      idLote: idLoteRef.current,
-      numeroPedido: numeroPedidoRef.current,
-      latitude,
-      longitude,
-      accuracy,
-      timestamp: Date.now()
-    };
-    
-    let fila: any[] = [];
-    try {
-      const filaSalva = localStorage.getItem('gps_pending_queue');
-      fila = filaSalva ? JSON.parse(filaSalva) : [];
-    } catch (e) {
-      fila = [];
-    }
-    fila.push(novoPonto);
-    localStorage.setItem('gps_pending_queue', JSON.stringify(fila));
-    
-    enviarFilaPendentes();
+    // 1. Tentar envio direto imediato (sem atraso de fila)
+    gravarPontoGPS(idEmp, idLot, numPed, latitude, longitude, accuracy)
+      .then(() => {
+        adicionarGpsLog(`[GPS Direto] ✓ Enviado com sucesso! Lat ${latitude}, Lng ${longitude}`);
+      })
+      .catch((err: any) => {
+        adicionarGpsLog(`[GPS Direto] Aviso no envio direto: ${err.message}. Adicionando à fila offline...`);
+        // 2. Se o envio direto falhar (ex: sem sinal/offline), coloca na fila offline
+        const novoPonto = {
+          idEmpresa: idEmp,
+          idLote: idLot,
+          numeroPedido: numPed,
+          latitude,
+          longitude,
+          accuracy,
+          timestamp: Date.now()
+        };
+        let fila: any[] = [];
+        try {
+          const filaSalva = localStorage.getItem('gps_pending_queue');
+          fila = filaSalva ? JSON.parse(filaSalva) : [];
+        } catch (e) { fila = []; }
+        fila.push(novoPonto);
+        localStorage.setItem('gps_pending_queue', JSON.stringify(fila));
+        enviarFilaPendentes();
+      });
   };
 
   // ─── Início do rastreamento ─────────────────────────────────────────────────
@@ -289,6 +314,22 @@ export function useGpsTracker() {
       (err) => adicionarGpsLog(`watchPosition erro: ${err.message}`),
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
     );
+
+    // 3. Timer de 10s garantido para captura ininterrupta (mesmo com GPS estático ou em background)
+    if (nativeIntervalIdRef.current !== null) {
+      clearInterval(nativeIntervalIdRef.current);
+    }
+    nativeIntervalIdRef.current = setInterval(() => {
+      adicionarGpsLog('[Timer 10s] Capturando posição GPS...');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'Timer10s', pos.coords.speed),
+        (err) => {
+          adicionarGpsLog(`[Timer 10s] Erro no timer: ${err.message}`);
+          enviarFilaPendentes();
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 8000 }
+      );
+    }, 10000);
 
     // Áudio silencioso para manter a aba ativa no background
     try {

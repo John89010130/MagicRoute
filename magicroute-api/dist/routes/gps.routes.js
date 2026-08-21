@@ -36,7 +36,7 @@ router.post('/gps-point', async (req, res) => {
 });
 /**
  * GET /api/gps/gps-points/:idLote
- * Recupera todas as coordenadas registradas para um lote
+ * Recupera todas as coordenadas registradas para um lote em ordem cronológica
  */
 router.get('/gps-points/:idLote', async (req, res) => {
     const idLote = (0, sql_service_1.sanitize)(req.params.idLote || '');
@@ -44,9 +44,12 @@ router.get('/gps-points/:idLote', async (req, res) => {
         res.status(400).json({ message: 'idLote é obrigatório' });
         return;
     }
-    const query = `SELECT * FROM startapp_magicroute..caminhos_gps 
-    WHERE IDLote = '${idLote}' 
-    ORDER BY NumeroPedido, DataRegistro ASC`;
+    const query = `SELECT ID, IDEmpresa, IDLote, NumeroPedido, Latitude, Longitude, Accuracy,
+                        CONVERT(varchar, DataRegistro, 126) as DataRegistroISO,
+                        DataRegistro
+                 FROM startapp_magicroute..caminhos_gps 
+                 WHERE IDLote = '${idLote}' 
+                 ORDER BY ID ASC`;
     await (0, sql_service_1.execAndRespond)(query, res);
 });
 exports.default = router;

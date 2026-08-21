@@ -43,7 +43,7 @@ router.post('/gps-point', async (req: Request, res: Response) => {
 
 /**
  * GET /api/gps/gps-points/:idLote
- * Recupera todas as coordenadas registradas para um lote
+ * Recupera todas as coordenadas registradas para um lote em ordem cronológica
  */
 router.get('/gps-points/:idLote', async (req: Request, res: Response) => {
   const idLote = sanitize(req.params.idLote || '');
@@ -52,9 +52,12 @@ router.get('/gps-points/:idLote', async (req: Request, res: Response) => {
     return;
   }
 
-  const query = `SELECT * FROM startapp_magicroute..caminhos_gps 
-    WHERE IDLote = '${idLote}' 
-    ORDER BY NumeroPedido, DataRegistro ASC`;
+  const query = `SELECT ID, IDEmpresa, IDLote, NumeroPedido, Latitude, Longitude, Accuracy,
+                        CONVERT(varchar, DataRegistro, 126) as DataRegistroISO,
+                        DataRegistro
+                 FROM startapp_magicroute..caminhos_gps 
+                 WHERE IDLote = '${idLote}' 
+                 ORDER BY ID ASC`;
     
   await execAndRespond(query, res);
 });
