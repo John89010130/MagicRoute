@@ -11,6 +11,7 @@ import Usuarios from './pages/Usuarios';
 import Locais from './pages/Locais';
 import Configuracoes from './pages/Configuracoes';
 import Veiculos from './pages/Veiculos';
+import AppUpdater from './components/AppUpdater';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -74,11 +75,11 @@ function AppRoutes() {
     </Routes>
   );
 }
-
 export default function App() {
   return (
     <HashRouter>
       <AuthProvider>
+        <AppUpdater />
         <AppRoutes />
       </AuthProvider>
     </HashRouter>
