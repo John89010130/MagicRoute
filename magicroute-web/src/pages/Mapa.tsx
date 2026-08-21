@@ -215,7 +215,8 @@ export default function Mapa() {
     if (!dateVal) return 0;
     if (typeof dateVal === 'number') return dateVal;
     let str = String(dateVal).trim();
-    if (str.includes(' ')) str = str.replace(' ', 'T');
+    if (str.includes(' ') && !str.includes('T')) str = str.replace(' ', 'T');
+    if (!str.endsWith('Z') && !str.includes('+') && !str.includes('-')) str = str + 'Z';
     const t = new Date(str).getTime();
     return isNaN(t) ? 0 : t;
   };
@@ -239,20 +240,15 @@ export default function Mapa() {
   const formatGpsTime = (dateStr: string) => {
     if (!dateStr) return 'N/A';
     try {
-      let normalized = dateStr;
-      if (normalized.endsWith('Z')) {
-        // Se termina com Z mas representa o horário local de Brasília do banco de dados
-        normalized = normalized.slice(0, -1) + '-03:00';
-      } else if (!normalized.includes('-03:00') && !normalized.includes('+') && !normalized.includes('Z')) {
-        // Se for string simples, tratar explicitamente como Brasília
-        if (normalized.includes('T')) {
-          normalized = normalized + '-03:00';
-        } else {
-          normalized = normalized.replace(' ', 'T') + '-03:00';
-        }
+      let str = String(dateStr).trim();
+      if (str.includes(' ') && !str.includes('T')) {
+        str = str.replace(' ', 'T');
+      }
+      if (!str.endsWith('Z') && !str.includes('+') && !str.includes('-')) {
+        str = str + 'Z';
       }
       
-      const date = new Date(normalized);
+      const date = new Date(str);
       if (isNaN(date.getTime())) return 'N/A';
       
       const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
