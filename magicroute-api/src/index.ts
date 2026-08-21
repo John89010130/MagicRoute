@@ -359,16 +359,22 @@ app.post('/RoteirizaIDLote', async (req, res) => {
 });
 
 app.post('/AtualizaSequencia', async (req, res) => {
-  const { IDEmpresa, IDLote, NrNotaFiscal, NumeroPedido, SequenciaOriginal, Sequencia, Sequencias } = req.body;
+  let { IDEmpresa, IDLote, NrNotaFiscal, NumeroPedido, SequenciaOriginal, Sequencia, Sequencias } = req.body;
   
   try {
     const idEmp = Number(IDEmpresa);
     const idLot = Number(IDLote);
 
+    if (typeof Sequencias === 'string') {
+      try {
+        Sequencias = JSON.parse(Sequencias);
+      } catch (e) {}
+    }
+
     if (Array.isArray(Sequencias) && Sequencias.length > 0) {
       for (const item of Sequencias) {
-        const seqNum = Number(item.Sequencia || item.sequencia);
-        const seqOrig = Number(item.SequenciaOriginal || item.sequenciaOriginal);
+        const seqNum = Number(item.Sequencia ?? item.sequencia);
+        const seqOrig = Number(item.SequenciaOriginal ?? item.sequenciaOriginal);
         const cleanNF = sanitize(item.NrNotaFiscal || item.nrNotaFiscal || '');
         const cleanPedido = sanitize(item.NumeroPedido || item.numeroPedido || '');
 

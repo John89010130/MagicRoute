@@ -212,11 +212,13 @@ export async function atualizarSequencia(
   if (sequenciasLote && sequenciasLote.length > 0) {
     return apiRequest('/AtualizaSequencia', {
       method: 'POST',
+      json: true,
       body: { IDEmpresa: idEmpresa, IDLote: idLote, Sequencias: sequenciasLote },
     });
   }
   return apiRequest('/AtualizaSequencia', {
     method: 'POST',
+    json: true,
     body: {
       IDEmpresa: idEmpresa,
       IDLote: idLote,
