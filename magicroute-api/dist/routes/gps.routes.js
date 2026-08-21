@@ -30,8 +30,9 @@ router.post('/gps-point', async (req, res) => {
         res.status(400).json({ message: 'Latitude e Longitude inválidas' });
         return;
     }
-    const query = `INSERT INTO startapp_magicroute..caminhos_gps (IDEmpresa, IDLote, NumeroPedido, Latitude, Longitude, Accuracy)
-    VALUES ('${idEmpresa}', '${idLote}', '${numeroPedido}', ${latitude}, ${longitude}, ${accuracy})`;
+    const query = `INSERT INTO startapp_magicroute..caminhos_gps (ID, IDEmpresa, IDLote, NumeroPedido, Latitude, Longitude, Accuracy)
+    SELECT ISNULL(MAX(ID), 0) + 1, '${idEmpresa}', '${idLote}', '${numeroPedido}', ${latitude}, ${longitude}, ${accuracy}
+    FROM startapp_magicroute..caminhos_gps`;
     await (0, sql_service_1.execAndRespond)(query, res);
 });
 /**
