@@ -52,22 +52,23 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void setDeliveryActive(final boolean active) {
             isDeliveryActive = active;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            PictureInPictureParams params = new PictureInPictureParams.Builder()
-                                    .setAutoEnterEnabled(active)
-                                    .setAspectRatio(new Rational(16, 9))
-                                    .build();
-                            setPictureInPictureParams(params);
-                        } catch (Exception e) {
-                            e.printStackTrace();
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder()
+                                    .setAspectRatio(new Rational(16, 9));
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // Android 12+
+                                builder.setAutoEnterEnabled(active);
+                            }
+                            setPictureInPictureParams(builder.build());
                         }
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
-                });
-            }
+                }
+            });
         }
 
         @JavascriptInterface
@@ -89,7 +90,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
-        if (isDeliveryActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isInPictureInPictureMode()) {
+        if (isDeliveryActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT < Build.VERSION_CODES.S && !isInPictureInPictureMode()) {
             enterPipModeInternal();
         }
     }
@@ -97,9 +98,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         super.onPause();
-        // Quando o Waze/Maps é aberto por Intent, a Activity entra em onPause()
-        // Aciona o modo PiP para manter o MagicRoute flutuando sobre o Waze/Maps
-        if (isDeliveryActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isInPictureInPictureMode()) {
+        // Em versões anteriores ao Android 12 (SDK 31), aciona PiP manualmente no onPause
+        if (isDeliveryActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT < Build.VERSION_CODES.S && !isInPictureInPictureMode()) {
             enterPipModeInternal();
         }
     }
@@ -109,6 +109,10 @@ public class MainActivity extends BridgeActivity {
             try {
                 PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
                 builder.setAspectRatio(new Rational(16, 9));
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    builder.setAutoEnterEnabled(true);
+                }
+                setPictureInPictureParams(builder.build());
                 enterPictureInPictureMode(builder.build());
             } catch (Exception e) {
                 e.printStackTrace();

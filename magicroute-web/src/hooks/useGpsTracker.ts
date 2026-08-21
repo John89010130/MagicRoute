@@ -247,57 +247,48 @@ export function useGpsTracker() {
 
     // ── MODO NATIVO (APK Android / iOS) ────────────────────────────────────
     if (Capacitor.isNativePlatform()) {
-      adicionarGpsLog('Plataforma nativa. Iniciando BackgroundGeolocation Foreground Service...');
-      try {
-        const watcherId = await BackgroundGeolocation.addWatcher(
-          {
-            backgroundTitle: 'MagicRoute — Rastreamento Ativo',
-            backgroundMessage: 'Localização em transmissão. Não feche o app.',
-            requestPermissions: true,
-            stale: false,
-            distanceFilter: 0 // 0 = dispara por tempo (sem filtro de distância)
-          },
-          (location: any, error: any) => {
-            if (error) {
-              adicionarGpsLog(`[GPS Nativo] Erro: ${error.message || JSON.stringify(error)}`);
-              return;
-            }
-            if (location) {
-              processarPontoGPS(location.latitude, location.longitude, location.accuracy, 'NativePlugin', location.speed);
-            }
+      adicionarGpsLog('Plataforma nativa detectada. Ativando BackgroundGeolocation Service...');
+      BackgroundGeolocation.addWatcher(
+        {
+          backgroundTitle: 'MagicRoute — Rastreamento Ativo',
+          backgroundMessage: 'Localização em transmissão. Não feche o app.',
+          requestPermissions: true,
+          stale: false,
+          distanceFilter: 0 // 0 = dispara por tempo (sem filtro de distância)
+        },
+        (location: any, error: any) => {
+          if (error) {
+            adicionarGpsLog(`[GPS Nativo] Callback Erro: ${error.message || JSON.stringify(error)}`);
+            return;
           }
-        );
+          if (location) {
+            processarPontoGPS(location.latitude, location.longitude, location.accuracy, 'NativePlugin', location.speed);
+          }
+        }
+      ).then((watcherId) => {
         nativeWatcherIdRef.current = watcherId;
-        adicionarGpsLog(`[GPS Nativo] Watcher ativo! ID: ${watcherId}`);
-
-        // Ponto inicial imediato
-        navigator.geolocation.getCurrentPosition(
-          (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'NativeInicial', pos.coords.speed),
-          (err) => adicionarGpsLog(`[GPS Nativo] Erro ponto inicial: ${err.message}`),
-          { enableHighAccuracy: true, timeout: 8000 }
-        );
-
-        // Timer de 30s de fallback nativo — garante envios mesmo sem movimento
-        nativeIntervalIdRef.current = setInterval(() => {
-          adicionarGpsLog('[GPS Nativo] Timer 30s de fallback disparado...');
-          navigator.geolocation.getCurrentPosition(
-            (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'NativeTimer', pos.coords.speed),
-            (err) => {
-              adicionarGpsLog(`[GPS Nativo] Erro no timer: ${err.message}`);
-              enviarFilaPendentes(); // Tenta esvaziar fila mesmo sem novo ponto
-            },
-            { enableHighAccuracy: false, maximumAge: 20000, timeout: 10000 }
-          );
-        }, 30000);
-
-        return; // Não executa o fluxo web abaixo
-      } catch (err: any) {
-        adicionarGpsLog(`[GPS Nativo] Falha: ${err.message}. Fallback para modo web...`);
-      }
+        adicionarGpsLog(`[GPS Nativo] Watcher registrado com sucesso! ID: ${watcherId}`);
+      }).catch((err: any) => {
+        adicionarGpsLog(`[GPS Nativo] Aviso no addWatcher: ${err.message}`);
+      });
     }
 
-    // ── MODO WEB FALLBACK (PWA / Chrome / Safari) ──────────────────────────
-    adicionarGpsLog('Modo Web (PWA/Browser). Iniciando rastreamento via navigator.geolocation...');
+    // ── RASTREAMENTO GEOLOCATION DIRETO E RESOLUTO (WEB & NATIVO) ───────────
+    adicionarGpsLog('Iniciando geolocalização contínua...');
+
+    // 1. Ponto inicial imediato no momento em que a rota começa (High Accuracy)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'PontoInicial', pos.coords.speed),
+      (err) => adicionarGpsLog(`Erro no ponto inicial GPS: ${err.message}`),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+
+    // 2. watchPosition contínuo para transmissão constante em movimento
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => processarPontoGPS(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'Watch', pos.coords.speed),
+      (err) => adicionarGpsLog(`watchPosition erro: ${err.message}`),
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+    );
 
     // Áudio silencioso para manter a aba ativa no background
     try {
