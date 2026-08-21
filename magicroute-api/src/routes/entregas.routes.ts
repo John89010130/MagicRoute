@@ -457,32 +457,70 @@ router.post('/roteirizar', async (req: Request, res: Response) => {
 
     if (entregasOrdenadas.length > 0) {
       const e = entregasOrdenadas[0];
-      const latSaida = parseFloat(e.LatitudeLocalSaida);
-      const lngSaida = parseFloat(e.LongitudeLocalSaida);
+      let latSaida = parseFloat(e.LatitudeLocalSaida);
+      let lngSaida = parseFloat(e.LongitudeLocalSaida);
+
+      const paradas = entregasOrdenadas.map((ent: any) => ({
+        lat: parseFloat(ent.LatitudeEntrega),
+        lng: parseFloat(ent.LongitudeEntrega),
+        nf: ent.NrNotaFiscal || ent.NumeroPedido || '',
+        seqOrig: ent.SequenciaOriginal
+      })).filter((c: any) => !isNaN(c.lat) && !isNaN(c.lng) && c.lat !== 0 && c.lng !== 0);
+
+      if (isNaN(latSaida) || isNaN(lngSaida) || latSaida === 0 || lngSaida === 0) {
+        if (paradas.length > 0) {
+          latSaida = paradas[0].lat;
+          lngSaida = paradas[0].lng;
+        } else {
+          latSaida = -22.4145;
+          lngSaida = -47.5615;
+        }
+      }
+
       const latChegada = parseFloat(e.LatitudeLocalChegada) || latSaida;
       const lngChegada = parseFloat(e.LongitudeLocalChegada) || lngSaida;
 
-      if (!isNaN(latSaida) && !isNaN(lngSaida)) {
-        const paradas = entregasOrdenadas.map((ent: any) => ({
-          lat: parseFloat(ent.LatitudeEntrega),
-          lng: parseFloat(ent.LongitudeEntrega),
-          nf: ent.NrNotaFiscal || ent.NumeroPedido || '',
-          seqOrig: ent.SequenciaOriginal
-        })).filter((c: any) => !isNaN(c.lat) && !isNaN(c.lng) && c.lat !== 0 && c.lng !== 0);
+      if (paradas.length > 0) {
+        const waypointsChunk = paradas.slice(0, 25);
+        
+        const origin = { lat: latSaida, lng: lngSaida };
+        const destination = paradas.length > 25 
+           ? waypointsChunk[waypointsChunk.length - 1] 
+           : { lat: latChegada, lng: lngChegada };
 
-        if (paradas.length > 0) {
-          // Lidar com limite de 25 waypoints agrupando os requests (para simplificar, calculamos os primeiros 25)
-          const waypointsChunk = paradas.slice(0, 25);
-          
-          const origin = { lat: latSaida, lng: lngSaida };
-          const destination = paradas.length > 25 
-             ? waypointsChunk[waypointsChunk.length - 1] 
-             : { lat: latChegada, lng: lngChegada };
-
+        let legs: any[] = [];
+        try {
           const resGoogle = await getDirectionsETA(origin, destination, waypointsChunk);
-          const legs = resGoogle?.legs || [];
+          legs = resGoogle?.legs || [];
+        } catch (gErr: any) {
+          console.warn('[ETA Google] Usando cálculo local de distância e tempo (Haversine):', gErr.message);
+        }
 
-          if (legs && legs.length > 0) {
+        if (!legs || legs.length === 0) {
+          const points = [origin, ...waypointsChunk, destination];
+          legs = [];
+          const calcDist = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          };
+          for (let i = 0; i < waypointsChunk.length; i++) {
+            const p1 = points[i];
+            const p2 = points[i+1];
+            const distKm = calcDist(p1.lat, p1.lng, p2.lat, p2.lng) * 1.3;
+            const durationSec = Math.max(180, Math.round((distKm / 30) * 3600));
+            legs.push({
+              duration: { value: durationSec },
+              distance: { value: Math.round(distKm * 1000) }
+            });
+          }
+        }
+
+        if (legs && legs.length > 0) {
             let dataBase = new Date();
             const horaInicioRaw = req.body.HoraSaida || e.HoraSaidaPrevista || '08:00';
             if (horaInicioRaw) {
@@ -608,7 +646,6 @@ router.post('/roteirizar', async (req: Request, res: Response) => {
           }
         }
       }
-    }
   } catch (etaErr) {
     console.error('Erro ao calcular ETAs:', etaErr);
   }

@@ -429,114 +429,151 @@ router.post('/roteirizar', async (req, res) => {
     `);
         if (entregasOrdenadas.length > 0) {
             const e = entregasOrdenadas[0];
-            const latSaida = parseFloat(e.LatitudeLocalSaida);
-            const lngSaida = parseFloat(e.LongitudeLocalSaida);
+            let latSaida = parseFloat(e.LatitudeLocalSaida);
+            let lngSaida = parseFloat(e.LongitudeLocalSaida);
+            const paradas = entregasOrdenadas.map((ent) => ({
+                lat: parseFloat(ent.LatitudeEntrega),
+                lng: parseFloat(ent.LongitudeEntrega),
+                nf: ent.NrNotaFiscal || ent.NumeroPedido || '',
+                seqOrig: ent.SequenciaOriginal
+            })).filter((c) => !isNaN(c.lat) && !isNaN(c.lng) && c.lat !== 0 && c.lng !== 0);
+            if (isNaN(latSaida) || isNaN(lngSaida) || latSaida === 0 || lngSaida === 0) {
+                if (paradas.length > 0) {
+                    latSaida = paradas[0].lat;
+                    lngSaida = paradas[0].lng;
+                }
+                else {
+                    latSaida = -22.4145;
+                    lngSaida = -47.5615;
+                }
+            }
             const latChegada = parseFloat(e.LatitudeLocalChegada) || latSaida;
             const lngChegada = parseFloat(e.LongitudeLocalChegada) || lngSaida;
-            if (!isNaN(latSaida) && !isNaN(lngSaida)) {
-                const paradas = entregasOrdenadas.map((ent) => ({
-                    lat: parseFloat(ent.LatitudeEntrega),
-                    lng: parseFloat(ent.LongitudeEntrega),
-                    nf: ent.NrNotaFiscal || ent.NumeroPedido || '',
-                    seqOrig: ent.SequenciaOriginal
-                })).filter((c) => !isNaN(c.lat) && !isNaN(c.lng) && c.lat !== 0 && c.lng !== 0);
-                if (paradas.length > 0) {
-                    // Lidar com limite de 25 waypoints agrupando os requests (para simplificar, calculamos os primeiros 25)
-                    const waypointsChunk = paradas.slice(0, 25);
-                    const origin = { lat: latSaida, lng: lngSaida };
-                    const destination = paradas.length > 25
-                        ? waypointsChunk[waypointsChunk.length - 1]
-                        : { lat: latChegada, lng: lngChegada };
+            if (paradas.length > 0) {
+                const waypointsChunk = paradas.slice(0, 25);
+                const origin = { lat: latSaida, lng: lngSaida };
+                const destination = paradas.length > 25
+                    ? waypointsChunk[waypointsChunk.length - 1]
+                    : { lat: latChegada, lng: lngChegada };
+                let legs = [];
+                try {
                     const resGoogle = await (0, google_service_1.getDirectionsETA)(origin, destination, waypointsChunk);
-                    const legs = resGoogle?.legs || [];
-                    if (legs && legs.length > 0) {
-                        let dataBase = new Date();
-                        const horaInicioRaw = req.body.HoraSaida || e.HoraSaidaPrevista || '08:00';
-                        if (horaInicioRaw) {
-                            const [h, m] = horaInicioRaw.split(':');
-                            if (h && m) {
-                                dataBase.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
-                            }
+                    legs = resGoogle?.legs || [];
+                }
+                catch (gErr) {
+                    console.warn('[ETA Google] Usando cálculo local de distância e tempo (Haversine):', gErr.message);
+                }
+                if (!legs || legs.length === 0) {
+                    const points = [origin, ...waypointsChunk, destination];
+                    legs = [];
+                    const calcDist = (lat1, lon1, lat2, lon2) => {
+                        const R = 6371;
+                        const dLat = (lat2 - lat1) * Math.PI / 180;
+                        const dLon = (lon2 - lon1) * Math.PI / 180;
+                        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                    };
+                    for (let i = 0; i < waypointsChunk.length; i++) {
+                        const p1 = points[i];
+                        const p2 = points[i + 1];
+                        const distKm = calcDist(p1.lat, p1.lng, p2.lat, p2.lng) * 1.3;
+                        const durationSec = Math.max(180, Math.round((distKm / 30) * 3600));
+                        legs.push({
+                            duration: { value: durationSec },
+                            distance: { value: Math.round(distKm * 1000) }
+                        });
+                    }
+                }
+                if (legs && legs.length > 0) {
+                    let dataBase = new Date();
+                    const horaInicioRaw = req.body.HoraSaida || e.HoraSaidaPrevista || '08:00';
+                    if (horaInicioRaw) {
+                        const [h, m] = horaInicioRaw.split(':');
+                        if (h && m) {
+                            dataBase.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
                         }
-                        const horaSaidaInicial = `${dataBase.getHours().toString().padStart(2, '0')}:${dataBase.getMinutes().toString().padStart(2, '0')}`;
-                        // Buscar configuração de tempo
-                        const configResult = await (0, database_1.executeQuery)(`
+                    }
+                    const horaSaidaInicial = `${dataBase.getHours().toString().padStart(2, '0')}:${dataBase.getMinutes().toString().padStart(2, '0')}`;
+                    // Buscar configuração de tempo
+                    const configResult = await (0, database_1.executeQuery)(`
               SELECT l.TempoAtendimento, e.TempoAtendimentoPadrao 
               FROM startapp_magicroute..Lotes l
               INNER JOIN startapp_magicroute..Empresas e ON e.IDEmpresa = l.IDEmpresa
               WHERE l.IDEmpresa = ${Number(IDEmpresa)} AND l.IDLote = ${Number(IDLote)}
             `);
-                        let tempoAtendimentoMinutos = 5;
-                        if (configResult.length > 0) {
-                            if (configResult[0].TempoAtendimento !== null) {
-                                tempoAtendimentoMinutos = configResult[0].TempoAtendimento;
-                            }
-                            else if (configResult[0].TempoAtendimentoPadrao !== null) {
-                                tempoAtendimentoMinutos = configResult[0].TempoAtendimentoPadrao;
-                            }
+                    let tempoAtendimentoMinutos = 5;
+                    if (configResult.length > 0) {
+                        if (configResult[0].TempoAtendimento !== null) {
+                            tempoAtendimentoMinutos = configResult[0].TempoAtendimento;
                         }
-                        const tempoAtendimentoSegundos = tempoAtendimentoMinutos * 60;
-                        for (let i = 0; i < waypointsChunk.length; i++) {
-                            if (legs[i]) {
-                                const duracaoSegundos = legs[i].duration.value;
-                                const distanciaMetros = legs[i].distance.value;
-                                const distanciaKm = (distanciaMetros / 1000).toFixed(2);
-                                // Soma a viagem
-                                dataBase.setSeconds(dataBase.getSeconds() + duracaoSegundos);
-                                // Aplicar tempo de espera de janelas de atendimento no ETA real
-                                const entOrd = entregasOrdenadas[i];
-                                if (entOrd) {
-                                    const inicio1Raw = entOrd.HoraRecebimentoInicio1;
-                                    const fim1Raw = entOrd.HoraRecebimentoFim1;
-                                    const inicio2Raw = entOrd.HoraRecebimentoInicio2;
-                                    const fim2Raw = entOrd.HoraRecebimentoFim2;
-                                    const p1 = (0, routing_service_1.parseHoraRaw)(entOrd.HoraRecebimentoInicio1);
-                                    const pf1 = (0, routing_service_1.parseHoraRaw)(entOrd.HoraRecebimentoFim1);
-                                    const p2 = (0, routing_service_1.parseHoraRaw)(entOrd.HoraRecebimentoInicio2);
-                                    const pf2 = (0, routing_service_1.parseHoraRaw)(entOrd.HoraRecebimentoFim2);
-                                    const w1Def = p1 !== null && pf1 !== null;
-                                    const w2Def = p2 !== null && pf2 !== null;
-                                    if (w1Def || w2Def) {
-                                        const curHours = dataBase.getHours();
-                                        const curMinutes = dataBase.getMinutes();
-                                        const curMinOfDay = curHours * 60 + curMinutes;
-                                        if (w1Def && w2Def) {
-                                            const i1Min = p1.h * 60 + p1.m;
-                                            const f1Min = pf1.h * 60 + pf1.m;
-                                            const i2Min = p2.h * 60 + p2.m;
-                                            if (curMinOfDay < i1Min) {
-                                                dataBase.setHours(p1.h, p1.m, 0, 0);
-                                            }
-                                            else if (curMinOfDay > f1Min && curMinOfDay < i2Min) {
-                                                dataBase.setHours(p2.h, p2.m, 0, 0);
-                                            }
+                        else if (configResult[0].TempoAtendimentoPadrao !== null) {
+                            tempoAtendimentoMinutos = configResult[0].TempoAtendimentoPadrao;
+                        }
+                    }
+                    const tempoAtendimentoSegundos = tempoAtendimentoMinutos * 60;
+                    for (let i = 0; i < waypointsChunk.length; i++) {
+                        if (legs[i]) {
+                            const duracaoSegundos = legs[i].duration.value;
+                            const distanciaMetros = legs[i].distance.value;
+                            const distanciaKm = (distanciaMetros / 1000).toFixed(2);
+                            // Soma a viagem
+                            dataBase.setSeconds(dataBase.getSeconds() + duracaoSegundos);
+                            // Aplicar tempo de espera de janelas de atendimento no ETA real
+                            const entOrd = entregasOrdenadas[i];
+                            if (entOrd) {
+                                const inicio1Raw = entOrd.HoraRecebimentoInicio1;
+                                const fim1Raw = entOrd.HoraRecebimentoFim1;
+                                const inicio2Raw = entOrd.HoraRecebimentoInicio2;
+                                const fim2Raw = entOrd.HoraRecebimentoFim2;
+                                const p1 = (0, routing_service_1.parseHoraRaw)(entOrd.HoraRecebimentoInicio1);
+                                const pf1 = (0, routing_service_1.parseHoraRaw)(entOrd.HoraRecebimentoFim1);
+                                const p2 = (0, routing_service_1.parseHoraRaw)(entOrd.HoraRecebimentoInicio2);
+                                const pf2 = (0, routing_service_1.parseHoraRaw)(entOrd.HoraRecebimentoFim2);
+                                const w1Def = p1 !== null && pf1 !== null;
+                                const w2Def = p2 !== null && pf2 !== null;
+                                if (w1Def || w2Def) {
+                                    const curHours = dataBase.getHours();
+                                    const curMinutes = dataBase.getMinutes();
+                                    const curMinOfDay = curHours * 60 + curMinutes;
+                                    if (w1Def && w2Def) {
+                                        const i1Min = p1.h * 60 + p1.m;
+                                        const f1Min = pf1.h * 60 + pf1.m;
+                                        const i2Min = p2.h * 60 + p2.m;
+                                        if (curMinOfDay < i1Min) {
+                                            dataBase.setHours(p1.h, p1.m, 0, 0);
                                         }
-                                        else if (w1Def) {
-                                            const i1Min = p1.h * 60 + p1.m;
-                                            if (curMinOfDay < i1Min) {
-                                                dataBase.setHours(p1.h, p1.m, 0, 0);
-                                            }
+                                        else if (curMinOfDay > f1Min && curMinOfDay < i2Min) {
+                                            dataBase.setHours(p2.h, p2.m, 0, 0);
                                         }
-                                        else if (w2Def) {
-                                            const i2Min = p2.h * 60 + p2.m;
-                                            if (curMinOfDay < i2Min) {
-                                                dataBase.setHours(p2.h, p2.m, 0, 0);
-                                            }
+                                    }
+                                    else if (w1Def) {
+                                        const i1Min = p1.h * 60 + p1.m;
+                                        if (curMinOfDay < i1Min) {
+                                            dataBase.setHours(p1.h, p1.m, 0, 0);
+                                        }
+                                    }
+                                    else if (w2Def) {
+                                        const i2Min = p2.h * 60 + p2.m;
+                                        if (curMinOfDay < i2Min) {
+                                            dataBase.setHours(p2.h, p2.m, 0, 0);
                                         }
                                     }
                                 }
-                                const dataFormatada = `${dataBase.getFullYear()}-${(dataBase.getMonth() + 1).toString().padStart(2, '0')}-${dataBase.getDate().toString().padStart(2, '0')}`;
-                                const horaFormatada = `${dataBase.getHours().toString().padStart(2, '0')}:${dataBase.getMinutes().toString().padStart(2, '0')}`;
-                                const tempoFormatado = Math.floor(duracaoSegundos / 60) + ' min';
-                                const curItem = waypointsChunk[i];
-                                let whereMatch = `IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}`;
-                                if (curItem && curItem.seqOrig) {
-                                    whereMatch += ` AND SequenciaOriginal = ${Number(curItem.seqOrig)}`;
-                                }
-                                else {
-                                    whereMatch += ` AND (NrNotaFiscal = '${curItem.nf}' OR NumeroPedido = '${curItem.nf}')`;
-                                }
-                                await (0, database_1.executeQuery)(`
+                            }
+                            const dataFormatada = `${dataBase.getFullYear()}-${(dataBase.getMonth() + 1).toString().padStart(2, '0')}-${dataBase.getDate().toString().padStart(2, '0')}`;
+                            const horaFormatada = `${dataBase.getHours().toString().padStart(2, '0')}:${dataBase.getMinutes().toString().padStart(2, '0')}`;
+                            const tempoFormatado = Math.floor(duracaoSegundos / 60) + ' min';
+                            const curItem = waypointsChunk[i];
+                            let whereMatch = `IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}`;
+                            if (curItem && curItem.seqOrig) {
+                                whereMatch += ` AND SequenciaOriginal = ${Number(curItem.seqOrig)}`;
+                            }
+                            else {
+                                whereMatch += ` AND (NrNotaFiscal = '${curItem.nf}' OR NumeroPedido = '${curItem.nf}')`;
+                            }
+                            await (0, database_1.executeQuery)(`
                   UPDATE startapp_magicroute..LotesEntregas 
                   SET TempoPrevistoEntrega = '${tempoFormatado}', 
                       DistanciaPrevista = ${distanciaKm}, 
@@ -544,23 +581,22 @@ router.post('/roteirizar', async (req, res) => {
                       HoraEntregaPrevista = '${horaFormatada}'
                   WHERE ${whereMatch}
                 `);
-                                // Soma o tempo de atendimento antes de ir pra próxima parada
-                                dataBase.setSeconds(dataBase.getSeconds() + tempoAtendimentoSegundos);
-                            }
+                            // Soma o tempo de atendimento antes de ir pra próxima parada
+                            dataBase.setSeconds(dataBase.getSeconds() + tempoAtendimentoSegundos);
                         }
-                        // A última leg é o trecho da última entrega de volta para a base (depósito)
-                        const legRetorno = legs[waypointsChunk.length];
-                        if (legRetorno) {
-                            dataBase.setSeconds(dataBase.getSeconds() + legRetorno.duration.value);
-                        }
-                        const horaRetornoFinal = `${dataBase.getHours().toString().padStart(2, '0')}:${dataBase.getMinutes().toString().padStart(2, '0')}`;
-                        // Salvar Início e Fim no Lote
-                        await (0, database_1.executeQuery)(`
+                    }
+                    // A última leg é o trecho da última entrega de volta para a base (depósito)
+                    const legRetorno = legs[waypointsChunk.length];
+                    if (legRetorno) {
+                        dataBase.setSeconds(dataBase.getSeconds() + legRetorno.duration.value);
+                    }
+                    const horaRetornoFinal = `${dataBase.getHours().toString().padStart(2, '0')}:${dataBase.getMinutes().toString().padStart(2, '0')}`;
+                    // Salvar Início e Fim no Lote
+                    await (0, database_1.executeQuery)(`
               UPDATE startapp_magicroute..Lotes 
               SET HoraSaidaPrevista = '${horaSaidaInicial}', HoraRetornoPrevista = '${horaRetornoFinal}'
               WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)}
             `);
-                    }
                 }
             }
         }
