@@ -796,6 +796,35 @@ export default function Entregas() {
     return false;
   };
 
+  const formatarHoraFimComData = (horaInicio: string, horaFim: string, dataLoteStr?: string) => {
+    if (!horaFim) return '';
+    if (!horaInicio) return horaFim;
+
+    const [hIni, mIni] = horaInicio.split(':').map(Number);
+    const [hFim, mFim] = horaFim.split(':').map(Number);
+
+    if (isNaN(hIni) || isNaN(hFim)) return horaFim;
+
+    const minIni = hIni * 60 + (mIni || 0);
+    const minFim = hFim * 60 + (mFim || 0);
+
+    // Se a hora final for menor que a inicial (ex: inicio 23:30, fim 00:13), passou da meia-noite (+1 dia)
+    if (minFim < minIni) {
+      if (dataLoteStr) {
+        try {
+          const dateObj = new Date(dataLoteStr.includes('T') ? dataLoteStr : `${dataLoteStr}T12:00:00`);
+          dateObj.setDate(dateObj.getDate() + 1);
+          const diaStr = String(dateObj.getDate()).padStart(2, '0');
+          const mesStr = String(dateObj.getMonth() + 1).padStart(2, '0');
+          return `${horaFim} (${diaStr}/${mesStr})`;
+        } catch (e) {}
+      }
+      return `${horaFim} (+1 dia)`;
+    }
+
+    return horaFim;
+  };
+
   const getTempoTotalTrânsito = () => {
     if (entregas.length === 0) return '';
     const saida = entregas[0].HoraSaidaPrevista;
@@ -927,21 +956,17 @@ export default function Entregas() {
     fetchMotoristasList();
   }, [user]);
 
-  const handleMotoristaChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const novoCodigo = Number(e.target.value);
-    if (!novoCodigo || !user || !idLote) return;
-    const motNome = motoristas.find(m => Number(m.Codigo) === novoCodigo)?.Nome || `Motorista ${novoCodigo}`;
-    if (!window.confirm(`Deseja alterar o motorista deste lote para "${motNome}"?`)) {
-      if (entregas.length > 0) {
-        setSelectedMotorista(String(entregas[0].CodigoMotorista || ''));
-      }
-      return;
-    }
+  const handleMotoristaChange = async (e: any) => {
+    const newMotoristaCode = e.target.value;
+    setSelectedMotorista(newMotoristaCode);
+    if (!user || !idLote) return;
     try {
-      await alterarMotoristaLote(user.idEmpresa, idLote, novoCodigo);
+      await alterarMotoristaLote(user.idEmpresa, idLote, newMotoristaCode);
+      const motObj = motoristas.find(m => String(m.Codigo) === String(newMotoristaCode));
+      const motNome = motObj ? motObj.Nome : `Motorista ${newMotoristaCode}`;
       await criarLog(
-        Number(user.idEmpresa),
-        Number(idLote),
+        Number(user.idEmpresa), 
+        Number(idLote), 
         user.nomeUsuario,
         'ALTERAR_MOTORISTA',
         `Alterou o motorista do lote para ${motNome}`
@@ -958,15 +983,18 @@ export default function Entregas() {
 
   const handleHoraSaidaBlur = async (e: any) => {
     if (!user || !idLote) return;
+    const val = e.target.value;
     try {
-      await salvarHoraSaidaLote(user.idEmpresa, idLote, e.target.value);
+      await salvarHoraSaidaLote(user.idEmpresa, idLote, val);
+      await roteirizarLote(user.idEmpresa, idLote, '0', val, formTempoAtendimento, user.nomeUsuario);
       await criarLog(
         Number(user.idEmpresa), 
         Number(idLote), 
         user.nomeUsuario, 
         'ALTERACAO_ADM', 
-        `Alterou a hora de saída do depósito para ${e.target.value}.`
+        `Alterou a hora de saída do depósito para ${val}.`
       );
+      await fetchEntregas(true);
     } catch (err) {
       console.error('Erro ao salvar hora de saída:', err);
     }
@@ -974,15 +1002,18 @@ export default function Entregas() {
 
   const handleTempoAtendimentoBlur = async (e: any) => {
     if (!user || !idLote) return;
+    const val = e.target.value;
     try {
-      await salvarTempoAtendimentoLote(user.idEmpresa, idLote, e.target.value);
+      await salvarTempoAtendimentoLote(user.idEmpresa, idLote, val);
+      await roteirizarLote(user.idEmpresa, idLote, '0', formHoraSaida, val, user.nomeUsuario);
       await criarLog(
         Number(user.idEmpresa), 
         Number(idLote), 
         user.nomeUsuario, 
         'ALTERACAO_ADM', 
-        `Alterou o tempo de atendimento padrão para ${e.target.value} min.`
+        `Alterou o tempo de atendimento padrão para ${val} min.`
       );
+      await fetchEntregas(true);
     } catch (err) {
       console.error('Erro ao salvar tempo de atendimento:', err);
     }
@@ -1009,6 +1040,8 @@ export default function Entregas() {
     if (!user || !idLote) return;
     setRoteirizando(true);
     try {
+      await salvarHoraSaidaLote(user.idEmpresa, idLote, formHoraSaida);
+      await salvarTempoAtendimentoLote(user.idEmpresa, idLote, formTempoAtendimento);
       await roteirizarLote(user.idEmpresa, idLote, '1', formHoraSaida, formTempoAtendimento, user.nomeUsuario);
       setIsRouteForced(false); 
       await fetchEntregas();
@@ -2061,7 +2094,7 @@ export default function Entregas() {
                 <p style={{ fontSize: '0.85rem', color: '#868e96', margin: '4px 0 0 0' }}>Administração, edição e sequenciamento da rota</p>
                 {entregas.length > 0 && entregas[0].HoraSaidaPrevista && (
                   <p style={{ fontSize: '0.85rem', color: '#2a9d8f', fontWeight: 700, margin: '4px 0 0 0' }}>
-                    Início Previsto: {entregas[0].HoraSaidaPrevista} • Fim Estimado: {entregas[0].HoraRetornoPrevista || entregas[entregas.length - 1].HoraEntregaPrevista} {getTempoTotalTrânsito() && `• Em Trânsito: ${getTempoTotalTrânsito()}`}
+                    Início Previsto: {entregas[0].HoraSaidaPrevista} • Fim Estimado: {formatarHoraFimComData(entregas[0].HoraSaidaPrevista, entregas[0].HoraRetornoPrevista || entregas[entregas.length - 1].HoraEntregaPrevista, formDataLote)} {getTempoTotalTrânsito() && `• Em Trânsito: ${getTempoTotalTrânsito()}`}
                   </p>
                 )}
               </div>
@@ -2479,7 +2512,7 @@ export default function Entregas() {
                         </td>
                         <td style={{ padding: '14px 8px', fontSize: '0.85rem', color: '#6c757d', fontWeight: 600 }}>-</td>
                         <td style={{ padding: '14px 8px', fontSize: '0.85rem', color: '#2a9d8f', fontWeight: 600 }}>
-                          {entregas[0].HoraRetornoPrevista}
+                          {formatarHoraFimComData(entregas[0].HoraSaidaPrevista, entregas[0].HoraRetornoPrevista, formDataLote)}
                         </td>
                         <td colSpan={2}></td>
                       </tr>
@@ -2559,7 +2592,7 @@ export default function Entregas() {
           </h1>
           {entregas.length > 0 && entregas[0].HoraSaidaPrevista && (
             <p style={{ fontSize: '0.75rem', opacity: 0.9, margin: '2px 0 0 0', fontWeight: 600 }}>
-              Início: {entregas[0].HoraSaidaPrevista} • Fim: {entregas[0].HoraRetornoPrevista || entregas[entregas.length - 1].HoraEntregaPrevista} {getTempoTotalTrânsito() && `• Trânsito: ${getTempoTotalTrânsito()}`}
+              Início: {entregas[0].HoraSaidaPrevista} • Fim: {formatarHoraFimComData(entregas[0].HoraSaidaPrevista, entregas[0].HoraRetornoPrevista || entregas[entregas.length - 1].HoraEntregaPrevista, formDataLote)} {getTempoTotalTrânsito() && `• Trânsito: ${getTempoTotalTrânsito()}`}
             </p>
           )}
         </div>
