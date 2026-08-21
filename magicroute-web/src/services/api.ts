@@ -205,11 +205,26 @@ export async function atualizarSequencia(
   idLote: string,
   nrNotaFiscal: string,
   sequencia: number,
-  numeroPedido?: string
+  numeroPedido?: string,
+  sequenciaOriginal?: number,
+  sequenciasLote?: any[]
 ) {
+  if (sequenciasLote && sequenciasLote.length > 0) {
+    return apiRequest('/AtualizaSequencia', {
+      method: 'POST',
+      body: { IDEmpresa: idEmpresa, IDLote: idLote, Sequencias: sequenciasLote },
+    });
+  }
   return apiRequest('/AtualizaSequencia', {
     method: 'POST',
-    body: { IDEmpresa: idEmpresa, IDLote: idLote, NrNotaFiscal: nrNotaFiscal, NumeroPedido: numeroPedido, Sequencia: sequencia },
+    body: {
+      IDEmpresa: idEmpresa,
+      IDLote: idLote,
+      NrNotaFiscal: nrNotaFiscal,
+      NumeroPedido: numeroPedido,
+      SequenciaOriginal: sequenciaOriginal,
+      Sequencia: sequencia
+    },
   });
 }
 

@@ -1334,22 +1334,59 @@ export default function Entregas() {
   };
 
   const draggedIndexRef = useRef<number | null>(null);
+  const saveVersionRef = useRef<number>(0);
 
   const salvarNovaOrdem = async (novaLista: any[]) => {
     if (!user || !idLote) return;
-    try {
-      entregasRef.current = novaLista;
-      setEntregas([...novaLista]);
+    
+    // Atualizar sequências visuais locais imediatamente
+    const listaComSequencia = novaLista.map((item, idx) => ({
+      ...item,
+      SequenciaRoteirizada: idx + 1
+    }));
 
-      await Promise.all(
-        novaLista.map((entrega, idx) => {
-          const nf = entrega.NrNotaFiscal || entrega.NRDOCUMENTO || '';
-          const pedido = entrega.NumeroPedido || '';
-          return atualizarSequencia(user.idEmpresa, idLote, nf, idx + 1, pedido);
-        })
-      );
+    entregasRef.current = listaComSequencia;
+    setEntregas([...listaComSequencia]);
+
+    const currentVersion = ++saveVersionRef.current;
+
+    try {
+      const sequenciasPayload = listaComSequencia.map((entrega, idx) => ({
+        NrNotaFiscal: entrega.NrNotaFiscal || entrega.NRDOCUMENTO || '',
+        NumeroPedido: entrega.NumeroPedido || '',
+        SequenciaOriginal: entrega.SequenciaOriginal || entrega.SEQUENCIAORIGINAL || null,
+        Sequencia: idx + 1
+      }));
+
+      try {
+        await atualizarSequencia(
+          user.idEmpresa,
+          idLote,
+          '',
+          0,
+          '',
+          undefined,
+          sequenciasPayload
+        );
+      } catch (batchErr) {
+        console.warn('Envio em lote falhou ou backend antigo; executando atualizações individuais:', batchErr);
+        await Promise.all(
+          listaComSequencia.map((entrega, idx) => {
+            const nf = entrega.NrNotaFiscal || entrega.NRDOCUMENTO || '';
+            const pedido = entrega.NumeroPedido || '';
+            const seqOrig = entrega.SequenciaOriginal || entrega.SEQUENCIAORIGINAL || undefined;
+            return atualizarSequencia(user.idEmpresa, idLote, nf, idx + 1, pedido, seqOrig);
+          })
+        );
+      }
       
+      // Se houve uma nova movimentação do usuário enquanto salvava, aborta para não sobrescrever a tela com requisição antiga
+      if (saveVersionRef.current !== currentVersion) return;
+
       await roteirizarLote(user.idEmpresa, idLote, '0', formHoraSaida, formTempoAtendimento, user.nomeUsuario);
+      
+      if (saveVersionRef.current !== currentVersion) return;
+
       setIsRouteForced(true);
       await fetchEntregas(true);
     } catch (err) {
@@ -1357,26 +1394,30 @@ export default function Entregas() {
     }
   };
 
-  const handleMoveUp = async (index: number) => {
+  const handleMoveUp = (index: number) => {
     if (index <= 0) return;
     const listCopy = [...entregasRef.current];
     const item = listCopy[index];
     listCopy.splice(index, 1);
     listCopy.splice(index - 1, 0, item);
-    entregasRef.current = listCopy;
-    setEntregas(listCopy);
-    await salvarNovaOrdem(listCopy);
+
+    const reordered = listCopy.map((ent, idx) => ({ ...ent, SequenciaRoteirizada: idx + 1 }));
+    entregasRef.current = reordered;
+    setEntregas(reordered);
+    salvarNovaOrdem(reordered);
   };
 
-  const handleMoveDown = async (index: number) => {
+  const handleMoveDown = (index: number) => {
     if (index >= entregasRef.current.length - 1) return;
     const listCopy = [...entregasRef.current];
     const item = listCopy[index];
     listCopy.splice(index, 1);
     listCopy.splice(index + 1, 0, item);
-    entregasRef.current = listCopy;
-    setEntregas(listCopy);
-    await salvarNovaOrdem(listCopy);
+
+    const reordered = listCopy.map((ent, idx) => ({ ...ent, SequenciaRoteirizada: idx + 1 }));
+    entregasRef.current = reordered;
+    setEntregas(reordered);
+    salvarNovaOrdem(reordered);
   };
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -1400,16 +1441,18 @@ export default function Entregas() {
     
     draggedIndexRef.current = overIndex;
     setDraggedIndex(overIndex);
-    entregasRef.current = listCopy;
-    setEntregas(listCopy);
+
+    const reordered = listCopy.map((ent, idx) => ({ ...ent, SequenciaRoteirizada: idx + 1 }));
+    entregasRef.current = reordered;
+    setEntregas(reordered);
   };
 
-  const handleDragEnd = async (e: React.DragEvent) => {
+  const handleDragEnd = (e: React.DragEvent) => {
     (e.currentTarget as HTMLElement).style.opacity = '1';
     setDraggedIndex(null);
     draggedIndexRef.current = null;
     const listaFinal = [...entregasRef.current];
-    await salvarNovaOrdem(listaFinal);
+    salvarNovaOrdem(listaFinal);
   };
 
   const getStatusBadge = (status: string) => {

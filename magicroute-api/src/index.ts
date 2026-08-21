@@ -359,25 +359,62 @@ app.post('/RoteirizaIDLote', async (req, res) => {
 });
 
 app.post('/AtualizaSequencia', async (req, res) => {
-  const { IDEmpresa, IDLote, NrNotaFiscal, NumeroPedido, Sequencia } = req.body;
-  const cleanNF = sanitize(NrNotaFiscal || '');
-  const cleanPedido = sanitize(NumeroPedido || '');
+  const { IDEmpresa, IDLote, NrNotaFiscal, NumeroPedido, SequenciaOriginal, Sequencia, Sequencias } = req.body;
+  
   try {
+    const idEmp = Number(IDEmpresa);
+    const idLot = Number(IDLote);
+
+    if (Array.isArray(Sequencias) && Sequencias.length > 0) {
+      for (const item of Sequencias) {
+        const seqNum = Number(item.Sequencia || item.sequencia);
+        const seqOrig = Number(item.SequenciaOriginal || item.sequenciaOriginal);
+        const cleanNF = sanitize(item.NrNotaFiscal || item.nrNotaFiscal || '');
+        const cleanPedido = sanitize(item.NumeroPedido || item.numeroPedido || '');
+
+        let whereMatch = '';
+        if (!isNaN(seqOrig) && seqOrig > 0) {
+          whereMatch = `AND SequenciaOriginal = ${seqOrig}`;
+        } else if (cleanNF && cleanPedido) {
+          whereMatch = `AND NrNotaFiscal = '${cleanNF}' AND NumeroPedido = '${cleanPedido}'`;
+        } else if (cleanNF) {
+          whereMatch = `AND NrNotaFiscal = '${cleanNF}'`;
+        } else if (cleanPedido) {
+          whereMatch = `AND NumeroPedido = '${cleanPedido}'`;
+        } else {
+          continue;
+        }
+
+        await executeQuery(
+          `UPDATE startapp_magicroute..LotesEntregas 
+           SET SequenciaRoteirizada = ${seqNum} 
+           WHERE IDEmpresa = ${idEmp} AND IDLote = ${idLot} ${whereMatch}`
+        );
+      }
+      return res.json({ sucesso: true, mensagem: 'Sequências do lote atualizadas em lote com sucesso.' });
+    }
+
+    const cleanNF = sanitize(NrNotaFiscal || '');
+    const cleanPedido = sanitize(NumeroPedido || '');
+    const seqOrig = Number(SequenciaOriginal);
+
     let whereMatch = '';
-    if (cleanNF && cleanPedido) {
+    if (!isNaN(seqOrig) && seqOrig > 0) {
+      whereMatch = `AND SequenciaOriginal = ${seqOrig}`;
+    } else if (cleanNF && cleanPedido) {
       whereMatch = `AND NrNotaFiscal = '${cleanNF}' AND NumeroPedido = '${cleanPedido}'`;
     } else if (cleanNF) {
       whereMatch = `AND NrNotaFiscal = '${cleanNF}'`;
     } else if (cleanPedido) {
       whereMatch = `AND NumeroPedido = '${cleanPedido}'`;
     } else {
-      return res.status(400).json({ sucesso: false, mensagem: 'NrNotaFiscal ou NumeroPedido é obrigatório.' });
+      return res.status(400).json({ sucesso: false, mensagem: 'Identificador da entrega (SequenciaOriginal, NrNotaFiscal ou NumeroPedido) é obrigatório.' });
     }
 
     await executeQuery(
       `UPDATE startapp_magicroute..LotesEntregas 
        SET SequenciaRoteirizada = ${Number(Sequencia)} 
-       WHERE IDEmpresa = ${Number(IDEmpresa)} AND IDLote = ${Number(IDLote)} ${whereMatch}`
+       WHERE IDEmpresa = ${idEmp} AND IDLote = ${idLot} ${whereMatch}`
     );
     res.json({ sucesso: true });
   } catch (err: any) {
