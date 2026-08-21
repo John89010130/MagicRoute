@@ -4,5 +4,5 @@
   "releaseDate": "2026-08-20",
   "title": "Nova Versão do MagicRoute Disponível!",
   "notes": "• Atualização instantânea dos tempos do lote no cabeçalho.\n• Persistência automática da hora de saída no banco de dados.\n• Suporte otimizado à janela flutuante no Android 13.\n• Indicador visual de entregas após meia-noite.",
-  "apkUrl": "https://github.com/John89010130/MagicRoute/releases/latest/download/app-release.apk"
+  "apkUrl": "https://github.com/John89010130/MagicRoute/raw/main/app-debug.apk"
 }

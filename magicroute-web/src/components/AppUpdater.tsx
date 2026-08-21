@@ -69,7 +69,11 @@ export default function AppUpdater() {
   };
 
   useEffect(() => {
-    // Executa verificação inicial após 2 segundos do app abrir
+    // Apenas executa verificação de atualização se estiver rodando no APP NATIVO ANDROID
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       checkVersion();
     }, 2000);
@@ -107,7 +111,7 @@ export default function AppUpdater() {
     }, 4000);
   };
 
-  if (!updateAvailable || modalDismissed || !updateInfo) return null;
+  if (!Capacitor.isNativePlatform() || !updateAvailable || modalDismissed || !updateInfo) return null;
 
   return (
     <div style={{
