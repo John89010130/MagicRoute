@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Download, Sparkles, X, RefreshCw, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 
-export const CURRENT_APP_VERSION = '1.0.0';
-export const CURRENT_VERSION_CODE = 1;
+export const CURRENT_APP_VERSION = '1.0.1';
+export const CURRENT_VERSION_CODE = 2;
 
 interface UpdateInfo {
   version: string;
