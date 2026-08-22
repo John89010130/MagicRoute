@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const sql_service_1 = require("../services/sql.service");
+const database_1 = require("../config/database");
 const router = (0, express_1.Router)();
 /**
  * POST /api/gps/gps-point
@@ -33,7 +34,8 @@ router.post('/gps-point', async (req, res) => {
     const query = `INSERT INTO startapp_magicroute..caminhos_gps (ID, IDEmpresa, IDLote, NumeroPedido, Latitude, Longitude, Accuracy)
     SELECT ISNULL(MAX(ID), 0) + 1, '${idEmpresa}', '${idLote}', '${numeroPedido}', ${latitude}, ${longitude}, ${accuracy}
     FROM startapp_magicroute..caminhos_gps`;
-    await (0, sql_service_1.execAndRespond)(query, res);
+    await (0, database_1.executeQuery)(query);
+    res.json({ sucesso: true });
 });
 /**
  * GET /api/gps/gps-points/:idLote

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { execAndRespond, sanitize } from '../services/sql.service';
+import { executeQuery } from '../config/database';
 
 const router = Router();
 
@@ -39,7 +40,8 @@ router.post('/gps-point', async (req: Request, res: Response) => {
     SELECT ISNULL(MAX(ID), 0) + 1, '${idEmpresa}', '${idLote}', '${numeroPedido}', ${latitude}, ${longitude}, ${accuracy}
     FROM startapp_magicroute..caminhos_gps`;
   
-  await execAndRespond(query, res);
+  await executeQuery(query);
+  res.json({ sucesso: true });
 });
 
 /**

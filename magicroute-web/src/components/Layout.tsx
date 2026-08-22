@@ -164,20 +164,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       {/* Sidebar Cinza Claro */}
-      <aside style={{
-        width: '260px',
-        background: 'var(--bg-secondary)',
-        borderRight: '1px solid var(--border)',
-        padding: '24px 16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        bottom: 0,
-        zIndex: 50,
-      }}>
+      <aside 
+        className="sidebar-nav-container"
+        style={{
+          width: '260px',
+          background: 'var(--bg-secondary)',
+          borderRight: '1px solid var(--border)',
+          padding: '24px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          bottom: 0,
+          zIndex: 50,
+        }}
+      >
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', marginBottom: '24px' }}>
           <div style={{
@@ -386,6 +389,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Estilos inline adicionais para links de navegação do admin */}
       <style>{`
+        .sidebar-nav-container {
+          overflow-y: auto !important;
+          scrollbar-width: none !important; /* Firefox */
+          -ms-overflow-style: none !important; /* IE e Edge */
+        }
+        .sidebar-nav-container::-webkit-scrollbar {
+          display: none !important; /* Chrome, Safari, Opera */
+          width: 0 !important;
+          height: 0 !important;
+        }
         .nav-link-adm {
           display: flex;
           align-items: center;
