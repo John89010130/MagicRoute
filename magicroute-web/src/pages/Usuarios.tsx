@@ -245,30 +245,40 @@ export default function Usuarios() {
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', background: '#f8f9fa', padding: '16px', borderRadius: '12px' }}>
             <div style={{ position: 'relative', width: '60px', height: '60px', borderRadius: '50%', background: '#e9ecef', overflow: 'hidden', border: '2px solid #8c2cf5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               {formUrlFoto ? (
-                <img src={formUrlFoto} alt="Foto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={formUrlFoto} alt="Foto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
               ) : (
                 <Users size={28} style={{ color: '#adb5bd' }} />
               )}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#495057' }}>Foto do Usuário/Motorista</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#495057' }}>Foto do Usuário/Motorista (URL da Imagem ou Arquivo)</label>
               <input 
-                type="file" 
-                accept="image/*"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    try {
-                      const base64 = await compressAndConvertBase64(file);
-                      setFormUrlFoto(base64);
-                    } catch (err) {
-                      console.error('Erro ao processar imagem:', err);
-                      alert('Erro ao carregar a imagem.');
-                    }
-                  }
-                }}
-                style={{ fontSize: '0.8rem', color: '#495057' }}
+                type="text" 
+                value={formUrlFoto} 
+                onChange={(e) => setFormUrlFoto(e.target.value)}
+                placeholder="Cole a URL da foto (https://...)"
+                style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.8rem', outline: 'none' }}
               />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>ou selecione do arquivo:</span>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      try {
+                        const base64 = await compressAndConvertBase64(file);
+                        setFormUrlFoto(base64);
+                      } catch (err) {
+                        console.error('Erro ao processar imagem:', err);
+                        alert('Erro ao carregar a imagem.');
+                      }
+                    }
+                  }}
+                  style={{ fontSize: '0.75rem', color: '#495057' }}
+                />
+              </div>
               {formUrlFoto && (
                 <button 
                   type="button"

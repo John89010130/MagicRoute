@@ -2660,7 +2660,7 @@ export default function Entregas() {
                     {/* Linha 1: Pedido, NF e Badge de Sequência */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
                       <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        📦 Pedido: {entrega.NumeroPedido || 'N/A'} • NF: {entrega.NrNotaFiscal || entrega.NRDOCUMENTO || 'N/A'}
+                        Pedido: {entrega.NumeroPedido || 'N/A'} • NF: {entrega.NrNotaFiscal || entrega.NRDOCUMENTO || 'N/A'}
                       </h3>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {isEmTransporte && (
@@ -2675,18 +2675,26 @@ export default function Entregas() {
                     </div>
                     
                     {/* Linha 2: Cliente */}
-                    <p style={{ fontSize: '0.82rem', color: '#8c2cf5', fontWeight: 700, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      👤 Cliente: {entrega.NomeCliente || entrega.NOMECLIENTE || 'Cliente'}
+                    <p style={{ fontSize: '0.85rem', color: '#8c2cf5', fontWeight: 800, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      {entrega.NomeCliente || entrega.NOMECLIENTE || 'Cliente'}
                     </p>
                     
-                    {/* Linha 3: Endereço completo (Endereço, Bairro, Cidade/UF) */}
-                    <p style={{ fontSize: '0.78rem', color: '#334155', fontWeight: 500, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      📍 {entrega.EnderecoEntrega || entrega.ENDERECO || 'Não informado'}, {entrega.Bairro || entrega.BAIRRO || 'N/A'} - {entrega.Cidade || entrega.CIDADE || 'N/A'}/{entrega.UFEntrega || entrega.UF || 'N/A'}
+                    {/* Linha 3: Endereço completo (Endereço, Bairro, Cidade/UF) sem emojis */}
+                    <p style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      {entrega.EnderecoEntrega || entrega.ENDERECO || 'Não informado'}, {entrega.Bairro || entrega.BAIRRO || ''} - {entrega.Cidade || entrega.CIDADE || ''}/{entrega.UFEntrega || entrega.UF || ''}
                     </p>
                     
-                    {/* Linha 4: Data, Viagem, Chegada e Distância */}
+                    {/* Linha 4: Data e Chegada sem emojis */}
                     <p style={{ fontSize: '0.76rem', color: '#64748b', margin: 0 }}>
-                      📅 {entrega.DataEntrega || entrega.DATAENTREGA || 'N/A'} • 🕐 Chegada: {entrega.HoraEntregaPrevista || 'N/A'} (Viagem: {entrega.TempoPrevistoEntrega || 'N/A'} • Dist: {entrega.DistanciaPrevista || '0.00'})
+                      {(() => {
+                        const raw = entrega.DataEntrega || entrega.DATAENTREGA || '';
+                        if (!raw) return '';
+                        try {
+                          const parts = raw.split('T')[0].split('-');
+                          if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]} • `;
+                        } catch (e) {}
+                        return raw ? `${raw} • ` : '';
+                      })()}Chegada: {entrega.HoraEntregaPrevista || '--:--'} {entrega.TempoPrevistoEntrega ? `(Viagem: ${entrega.TempoPrevistoEntrega} min)` : ''}
                     </p>
 
                     {isEntregue && (
@@ -2749,7 +2757,7 @@ export default function Entregas() {
                           <button 
                             onClick={() => handleIniciarEntrega(entrega)}
                             style={{
-                              background: '#2563eb',
+                              background: 'linear-gradient(135deg, #8c2cf5 0%, #6e1ac9 100%)',
                               color: 'white',
                               border: 'none',
                               width: '36px',
@@ -2759,11 +2767,11 @@ export default function Entregas() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               cursor: 'pointer',
-                              boxShadow: '0 2px 5px rgba(37, 99, 235, 0.2)'
+                              boxShadow: '0 2px 5px rgba(140, 44, 245, 0.25)'
                             }}
-                            title="Iniciar com Waze"
+                            title="Iniciar transporte para esta entrega"
                           >
-                            <Navigation size={16} style={{ transform: 'rotate(90deg)' }} />
+                            <Navigation size={18} />
                           </button>
                         )}
 
@@ -2783,7 +2791,7 @@ export default function Entregas() {
                             cursor: 'pointer',
                             boxShadow: '0 2px 5px rgba(42, 157, 143, 0.2)'
                           }}
-                          title="Entregar Realizada"
+                          title="Entrega Realizada"
                         >
                           <Check size={18} />
                         </button>
@@ -2813,23 +2821,69 @@ export default function Entregas() {
                 </div>
               );
             })}
-            {entregas.length > 0 && entregas[0].HoraRetornoPrevista && (
+            
+            {/* Card de Retorno ao Depósito com Botão de Navegação Waze/Maps */}
+            {entregas.length > 0 && (
               <div style={{
-                background: '#f1f3f5',
-                borderRadius: '20px',
+                background: '#ffffff',
+                borderRadius: '16px',
                 padding: '16px',
-                border: '1.5px dashed #ced4da',
+                border: '2px dashed #8c2cf5',
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center'
+                alignItems: 'center',
+                gap: '12px',
+                marginTop: '12px',
+                boxShadow: '0 4px 12px rgba(140, 44, 245, 0.05)'
               }}>
                 <div>
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#495057', margin: 0 }}>Retorno ao Depósito</h3>
-                  <p style={{ fontSize: '0.8rem', color: '#6c757d', margin: 0 }}>Fim da Rota</p>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>
+                    Retorno ao Depósito / Base
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '4px 0 0 0', fontWeight: 600 }}>
+                    {entregas[0].LocalChegada || entregas[0].LocalSaida || 'Depósito Central'}
+                  </p>
+                  {entregas[0].HoraRetornoPrevista && (
+                    <p style={{ fontSize: '0.75rem', color: '#8c2cf5', fontWeight: 700, margin: '2px 0 0 0' }}>
+                      Chegada Estimada: {entregas[0].HoraRetornoPrevista}
+                    </p>
+                  )}
                 </div>
-                <div style={{ fontSize: '1rem', color: '#2a9d8f', fontWeight: 700 }}>
-                  {entregas[0].HoraRetornoPrevista}
-                </div>
+                <button
+                  onClick={() => {
+                    const primeira = entregas[0] || {};
+                    const dest = primeira.LocalChegada || primeira.LocalSaida || 'Depósito Central';
+                    const lat = primeira.LatitudeChegada || primeira.LatitudeSaida;
+                    const lng = primeira.LongitudeChegada || primeira.LongitudeSaida;
+                    setNavModalEntrega({
+                      NumeroPedido: 'RETORNO',
+                      NomeCliente: 'Retorno ao Depósito / Base',
+                      EnderecoEntrega: dest,
+                      LatitudeEntrega: lat,
+                      LongitudeEntrega: lng,
+                      IDEmpresa: user?.idEmpresa
+                    });
+                    setShowNavModal(true);
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #8c2cf5 0%, #6e1ac9 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '10px 16px',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(140, 44, 245, 0.25)',
+                    flexShrink: 0
+                  }}
+                >
+                  <Navigation size={16} />
+                  Iniciar Volta (Waze/Maps)
+                </button>
               </div>
             )}
           </div>

@@ -230,24 +230,33 @@ export default function Inicio() {
                       </div>
                     </div>
 
-                    {/* Linha 2: Data e Horários Previstos */}
-                    <p style={{ fontSize: '0.76rem', color: '#64748b', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ color: '#8c2cf5', fontWeight: 700 }}>📅 {lote.DataEntrega || 'N/A'}</span>
-                      {lote.HoraSaidaPrevista && (
-                        <span style={{ color: '#64748b' }}>
-                          • 🕐 {lote.HoraSaidaPrevista} às {lote.HoraRetornoPrevista || '--:--'}
-                        </span>
-                      )}
+                    {/* Linha 2: Data da Rota */}
+                    <div style={{ fontSize: '0.8rem', color: '#8c2cf5', fontWeight: 800, margin: 0 }}>
+                      {(() => {
+                        const raw = lote.DataEntrega || lote.DataLote || '';
+                        if (!raw) return 'N/A';
+                        try {
+                          const datePart = raw.split('T')[0];
+                          const parts = datePart.split('-');
+                          if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                        } catch (e) {}
+                        return raw;
+                      })()}
+                    </div>
+
+                    {/* Linha 3: Hora Início e Retorno Estimado (em baixo da data) */}
+                    <div style={{ fontSize: '0.76rem', color: '#475569', margin: 0, fontWeight: 600 }}>
+                      Saída: {lote.HoraSaidaPrevista || lote.HoraSaida || '--:--'} {lote.HoraRetornoPrevista ? `às ${lote.HoraRetornoPrevista}` : ''}
+                    </div>
+
+                    {/* Linha 4: Veículo e Placa (sem emojis e sem parênteses) */}
+                    <p style={{ fontSize: '0.76rem', color: '#64748b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      <strong>{lote.Veiculo || 'Veículo'}</strong> {lote.PlacaEntrega ? `• ${lote.PlacaEntrega}` : ''}
                     </p>
 
-                    {/* Linha 3: Veículo e Placa */}
+                    {/* Linha 5: Locais de Saída e Chegada (sem emojis) */}
                     <p style={{ fontSize: '0.76rem', color: '#64748b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      🚚 <strong>{lote.Veiculo || 'Veículo'}</strong> {lote.PlacaEntrega ? `(${lote.PlacaEntrega})` : '(Sem Placa)'}
-                    </p>
-
-                    {/* Linha 4: Locais de Saída e Chegada */}
-                    <p style={{ fontSize: '0.76rem', color: '#64748b', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      📍 {lote.LocalSaida || 'Base'} ➔ 🏁 {lote.LocalChegada || lote.LocalSaida || 'Base'}
+                      {lote.LocalSaida || 'Base'} ➔ {lote.LocalChegada || lote.LocalSaida || 'Base'}
                     </p>
                   </div>
 

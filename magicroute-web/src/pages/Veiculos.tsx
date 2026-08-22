@@ -237,35 +237,45 @@ export default function Veiculos() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Foto do Veículo</label>
+              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Foto do Veículo (URL da Imagem ou Arquivo)</label>
               
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <div style={{ width: '64px', height: '48px', borderRadius: '6px', background: '#e2e8f0', overflow: 'hidden', border: '1.5px solid #8c2cf5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {formUrlVeiculo ? (
-                    <img src={formUrlVeiculo} alt="Veículo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={formUrlVeiculo} alt="Veículo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   ) : (
                     <Truck size={20} style={{ color: '#94a3b8' }} />
                   )}
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
                   <input 
-                    type="file" 
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        try {
-                          const base64 = await compressAndConvertBase64(file);
-                          setFormUrlVeiculo(base64);
-                        } catch (err) {
-                          console.error('Erro ao processar imagem:', err);
-                          alert('Erro ao processar imagem do veículo.');
-                        }
-                      }
-                    }}
-                    style={{ fontSize: '0.75rem', color: '#64748b' }}
+                    type="text" 
+                    value={formUrlVeiculo} 
+                    onChange={(e) => setFormUrlVeiculo(e.target.value)}
+                    placeholder="Cole a URL da imagem (https://...)"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.8rem', outline: 'none' }}
                   />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>ou selecione do arquivo:</span>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          try {
+                            const base64 = await compressAndConvertBase64(file);
+                            setFormUrlVeiculo(base64);
+                          } catch (err) {
+                            console.error('Erro ao processar imagem:', err);
+                            alert('Erro ao processar imagem do veículo.');
+                          }
+                        }
+                      }}
+                      style={{ fontSize: '0.75rem', color: '#64748b' }}
+                    />
+                  </div>
                   {formUrlVeiculo && (
                     <button 
                       type="button"
